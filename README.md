@@ -55,6 +55,20 @@ make migrate MSG="your migration message" ENV=dev
 ├── uv.lock                 # project deps lock.
 ```
 
+### Test
+
+Test helpers locally:
+
+```bash
+uv run src/helpers.py
+```
+
+Test helpers on Modal:
+
+```bash
+modal run src/helpers.py
+```
+
 ### App
 
 Serve the app locally:

@@ -20,8 +20,6 @@ from db.models import (
 )
 from utils import (
     APP_NAME,
-    CPU,
-    MEM,
     MINUTES,
     PARENT_PATH,
     PYTHON_VERSION,
@@ -1427,8 +1425,6 @@ f_app = get_app()
 
 @app.function(
     image=FE_IMAGE,
-    cpu=CPU,
-    memory=MEM,
     secrets=SECRETS,
     timeout=5 * MINUTES,
     scaledown_window=15 * MINUTES,

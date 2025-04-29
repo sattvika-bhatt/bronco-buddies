@@ -6,14 +6,20 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.15.2",
+    "flash-attn>=2.7.4.post1",
+    "flashinfer-python>=0.2.5",
+    "huggingface-hub[hf-transfer]>=0.30.2",
     "modal>=0.74.3",
     "passlib>=1.7.4",
     "pillow>=11.2.1",
     "psycopg2>=2.9.10",
     "python-dotenv>=1.1.0",
     "python-fasthtml>=0.12.12",
+    "rerankers>=0.9.1.post1",
+    "sentence-transformers>=4.1.0",
     "simpleicons>=7.21.0",
     "sqlalchemy>=2.0.40",
     "sqlmodel>=0.0.24",
     "starlette>=0.46.2",
+    "vllm>=0.8.5",
 ]

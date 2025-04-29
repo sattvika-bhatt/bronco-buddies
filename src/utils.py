@@ -26,6 +26,4 @@ SECRETS = [
 ]
 
 MINUTES = 60  # seconds
-CPU = 8  # cores
-MEM = 32768  # MB
 PYTHON_VERSION = "3.12"
