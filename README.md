@@ -40,6 +40,12 @@ Migrate db (do before running the app, env=local/dev/main):
 make migrate MSG="your migration message" ENV=dev
 ```
 
+Run unit tests:
+
+```bash
+uv run pytest -q
+```
+
 ### Repository Structure
 
 ```bash

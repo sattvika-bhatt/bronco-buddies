@@ -38,7 +38,7 @@ class UserBase(SQLModel):
 
 class User(UserBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    uuid: str = Field(default=str(uuid.uuid4()))
+    uuid: str = Field(default_factory=lambda: str(uuid.uuid4()))
     hashed_password: str | None = Field(default=None)
     reset_token: str | None = Field(default=None)
     reset_token_expiry: datetime | None = Field(default=None)
