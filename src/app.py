@@ -1,5 +1,6 @@
 import base64
 import io
+import json
 import os
 import smtplib
 import ssl
@@ -20,8 +21,13 @@ from db.models import (
 )
 from utils import (
     APP_NAME,
+    GRADUATION_YEARS,
+    INTERESTS,
+    MAJORS,
+    MINORS,
     MINUTES,
     PARENT_PATH,
+    PERSONALITY_TRAITS,
     PYTHON_VERSION,
     SECRETS,
 )
@@ -124,6 +130,16 @@ def get_app():  # noqa: C901
             req.scope["session_id"] = sess.setdefault("session_id", str(uuid.uuid4()))
         if "user_uuid" not in sess:
             req.scope["user_uuid"] = sess.setdefault("user_uuid", "")
+        if "graduation_year" not in sess:
+            req.scope["graduation_year"] = sess.setdefault("graduation_year", "")
+        if "major" not in sess:
+            req.scope["major"] = sess.setdefault("major", "")
+        if "minor" not in sess:
+            req.scope["minor"] = sess.setdefault("minor", "")
+        if "interests" not in sess:
+            req.scope["interests"] = sess.setdefault("interests", "")
+        if "traits" not in sess:
+            req.scope["traits"] = sess.setdefault("traits", "")
 
     def _not_found(req, exc):
         return (
@@ -278,7 +294,137 @@ def get_app():  # noqa: C901
 
     def home_content():
         return fh.Main(
-            fh.H1("Home", cls=f"text-4xl font-bold text-{text_color} text-center"),
+            fh.Div(
+                fh.H1(
+                    "No friends? Find some here!",
+                    cls=f"text-4xl font-bold text-{text_color} text-center",
+                ),
+                fh.Form(
+                    fh.Div(
+                        fh.Select(
+                            fh.Option(
+                                "-- select graduation year --",
+                                disabled="",
+                                selected="",
+                                value="",
+                            ),
+                            *[fh.Option(year, value=year) for year in GRADUATION_YEARS],
+                            id="graduation-year",
+                            name="graduation_year",
+                            hx_post="/set-graduation-year",
+                            hx_target="this",
+                            hx_swap="none",
+                            cls=f"w-full {input_cls}",
+                            required=True,
+                        ),
+                        fh.Select(
+                            fh.Option(
+                                "-- select major --", disabled="", selected="", value=""
+                            ),
+                            *[fh.Option(major, value=major) for major in MAJORS],
+                            id="major",
+                            name="major",
+                            hx_post="/set-major",
+                            hx_target="this",
+                            hx_swap="none",
+                            cls=f"w-full {input_cls}",
+                            required=True,
+                        ),
+                        fh.Select(
+                            fh.Option(
+                                "-- select minor --", disabled="", selected="", value=""
+                            ),
+                            *[fh.Option(minor, value=minor) for minor in MINORS],
+                            id="minor",
+                            name="minor",
+                            hx_post="/set-minor",
+                            hx_target="this",
+                            hx_swap="none",
+                            cls=f"w-full {input_cls}",
+                            required=True,
+                        ),
+                        fh.Div(
+                            fh.H2(
+                                "Interests", cls=f"text-2xl font-bold text-{text_color}"
+                            ),
+                            fh.Div(
+                                *[
+                                    fh.Div(
+                                        fh.Label(
+                                            fh.Input(
+                                                type="checkbox",
+                                                name="interest",
+                                                value=interest,
+                                                hx_post="/set-interest",
+                                                hx_target="this",
+                                                hx_swap="none",
+                                            ),
+                                            interest,
+                                            cls=f"text-{text_color} flex justify-start items-center gap-1",
+                                        ),
+                                        cls="flex justify-start items-center",
+                                    )
+                                    for interest in INTERESTS
+                                ],
+                                cls="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2",
+                            ),
+                            id="interests",
+                            cls="w-full flex flex-col gap-4",
+                        ),
+                        fh.Div(
+                            fh.H2(
+                                "Personality Traits",
+                                cls=f"text-2xl font-bold text-{text_color}",
+                            ),
+                            fh.Div(
+                                *[
+                                    fh.Div(
+                                        fh.Label(
+                                            fh.Input(
+                                                type="checkbox",
+                                                name="trait",
+                                                value=trait,
+                                                hx_post="/set-trait",
+                                                hx_target="this",
+                                                hx_swap="none",
+                                            ),
+                                            trait,
+                                            cls=f"text-{text_color} flex justify-start items-center gap-1",
+                                        ),
+                                        cls="flex justify-start items-center",
+                                    )
+                                    for trait in PERSONALITY_TRAITS
+                                ],
+                                cls="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2",
+                            ),
+                            id="traits",
+                            cls="w-full flex flex-col gap-4",
+                        ),
+                        fh.Button(
+                            fh.P(
+                                "Please someone good...",
+                                id="find-matches-button-text",
+                                cls=f"hide-when-loading text-{text_color} hover:text-{text_button_hover_color}",
+                            ),
+                            spinner(
+                                id="find-matches-loader",
+                                cls=f"w-6 h-6 text-{text_color} hover:text-{text_button_hover_color}",
+                            ),
+                            id="find-matches-button",
+                            type="submit",
+                            cls=f"w-full {click_button} {rounded} p-3 mt-4",
+                        ),
+                        cls="w-full flex flex-col gap-4",
+                    ),
+                    hx_post="/find-matches",
+                    hx_target="this",
+                    hx_swap="none",
+                    hx_indicator="#find-matches-button-text, #find-matches-loader",
+                    hx_disabled_elt="#find-matches-button",
+                    cls=f"w-full md:w-2/3 flex flex-col justify-center items-center gap-8 {input_cls} p-8",
+                ),
+                cls="w-full flex flex-col justify-center items-center gap-8",
+            ),
             cls=page_ctnt,
         )
 
@@ -962,6 +1108,65 @@ def get_app():  # noqa: C901
         )
 
     # routes
+    ## set form inputs in session state
+    @f_app.post("/set-graduation-year")
+    def set_graduation_year(session, graduation_year: int):
+        session["graduation_year"] = graduation_year
+        return None
+
+    @f_app.post("/set-major")
+    def set_major(session, major: str):
+        session["major"] = major
+        return None
+
+    @f_app.post("/set-minor")
+    def set_minor(session, minor: str):
+        session["minor"] = minor
+        return None
+
+    @f_app.post("/set-interest")
+    def set_interest(session, interest: str):
+        if not session["interests"]:
+            session["interests"] = json.dumps([interest])
+        lst_interests = json.loads(session["interests"])
+        if interest not in lst_interests:
+            lst_interests.append(interest)
+        session["interests"] = json.dumps(lst_interests)
+        return None
+
+    @f_app.post("/set-trait")
+    def set_trait(session, trait: str):
+        if not session["traits"]:
+            session["traits"] = json.dumps([trait])
+        lst_traits = json.loads(session["traits"])
+        if trait not in lst_traits:
+            lst_traits.append(trait)
+        session["traits"] = json.dumps(lst_traits)
+        return None
+
+    ## find matches
+    @f_app.post("/find-matches")
+    def find_matches(session):
+        curr_user = get_curr_user(session)
+        if not session["graduation_year"]:
+            fh.add_toast(session, "Please select a graduation year.", "error")
+            return None
+        if not session["major"]:
+            fh.add_toast(session, "Please select a major.", "error")
+            return None
+        if not session["minor"]:
+            fh.add_toast(session, "Please select a minor.", "error")
+            return None
+        if not session["interests"]:
+            fh.add_toast(session, "Please select at least one interest.", "error")
+            return None
+        if not session["traits"]:
+            fh.add_toast(session, "Please select at least one trait.", "error")
+            return None
+        if not curr_user:
+            return fh.Redirect("/signup")
+        return fh.Redirect("/matches")
+
     ## overlay
     @f_app.get("/user/overlay/show")
     def overlay_show(session):
@@ -1068,7 +1273,7 @@ def get_app():  # noqa: C901
                     return None
                 else:
                     session["user_uuid"] = db_user.uuid
-                    return fh.Redirect("/")
+                    return fh.Redirect("/matches")
 
     @f_app.post("/auth/signup")
     def email_signup(session, email: str, password: str):
@@ -1100,7 +1305,7 @@ def get_app():  # noqa: C901
                 db_session.commit()
                 db_session.refresh(db_user)
                 session["user_uuid"] = db_user.uuid
-                return fh.Redirect("/")
+                return fh.Redirect("/matches")
 
     @f_app.post("/auth/forgot-password")
     def forgot_password(session, email: str):

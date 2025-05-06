@@ -15,7 +15,13 @@ from db.models import (
 )
 from utils import (
     APP_NAME,
+    GRADUATION_YEARS,
+    INTERESTS,
+    LOGIN_TYPES,
+    MAJORS,
+    MINORS,
     MINUTES,
+    PERSONALITY_TRAITS,
     PYTHON_VERSION,
     SECRETS,
 )
@@ -112,231 +118,20 @@ app = modal.App(f"{APP_NAME}-helpers")
 )
 @modal.concurrent(max_inputs=small_llm_max_num_seqs)
 def create_users(user_idxs: list[int]) -> list[UserCreate]:
-    # example choices
-    login_types = ["github", "google", "email"]
-    majors = [
-        # College of Arts and Sciences
-        "Anthropology",
-        "Art History",
-        "Biochemistry",
-        "Biology",
-        "Chemistry",
-        "Child Studies",
-        "Classical Studies",
-        "Communication",
-        "Computer Science",
-        "Economics",
-        "Engineering Physics",
-        "English",
-        "Environmental Science",
-        "Environmental Studies",
-        "Ethnic Studies",
-        "French and Francophone Studies",
-        "History",
-        "Individual Studies",
-        "Italian Studies",
-        "Mathematics",
-        "Music",
-        "Neuroscience",
-        "Philosophy",
-        "Physics",
-        "Political Science",
-        "Psychology",
-        "Public Health Science",
-        "Religious Studies",
-        "Sociology",
-        "Spanish Studies",
-        "Studio Art",
-        "Theatre Arts",
-        "Women's and Gender Studies",
-        # Leavey School of Business
-        "Accounting",
-        "Accounting & Information Systems",
-        "Economics",
-        "Finance",
-        "Management",
-        "Marketing",
-        "Operations and Management Information Systems",
-        # School of Engineering
-        "Bioengineering",
-        "Civil Engineering",
-        "Computer Science and Engineering",
-        "Electrical and Computer Engineering",
-        "Electrical Engineering",
-        "General Engineering",
-        "Mechanical Engineering",
-        "Web Design and Engineering",
-    ]
-    minors = [
-        # College of Arts and Sciences
-        "Anthropology",
-        "Art History",
-        "Asian American Studies",
-        "Asian Studies",
-        "Biology",
-        "Catholic Studies",
-        "Chemistry",
-        "Classical Studies",
-        "Communication",
-        "Computer Science",
-        "Creative Writing",
-        "Dance",
-        "Digital Filmmaking",
-        "Economics",
-        "English",
-        "Environmental Studies",
-        "Ethnic Studies",
-        "French and Francophone Studies",
-        "German Studies",
-        "Gerontology",
-        "Graphic Design",
-        "History",
-        "Italian Studies",
-        "Japanese Studies",
-        "Journalism",
-        "Latin American Studies",
-        "Mathematics",
-        "Medieval and Renaissance Studies",
-        "Music",
-        "Musical Theatre",
-        "Philosophy",
-        "Physics",
-        "Political Science",
-        "Psychology",
-        "Public Health",
-        "Religious Studies",
-        "Sociology",
-        "Spanish Studies",
-        "Studio Art",
-        "Sustainability",
-        "Theatre",
-        "Urban Education",
-        "Women's and Gender Studies",
-        # Leavey School of Business
-        "Accounting",
-        "Economics",
-        "Entrepreneurship",
-        "Finance",
-        "Information Systems",
-        "International Business",
-        "Management",
-        "Marketing",
-        "Real Estate",
-        # School of Engineering
-        "Aerospace Engineering",
-        "Bioengineering",
-        "Civil Engineering",
-        "Computer Science and Engineering",
-        "Electrical and Computer Engineering",
-        "General Engineering",
-        "Mechanical Engineering",
-        "Web Design and Engineering",
-    ]
-    graduation_years = [2025, 2026, 2027, 2028, 2029]
-    interests = [
-        "Machine Learning",
-        "Artificial Intelligence",
-        "Data Science",
-        "Statistics",
-        "Mathematics",
-        "Social Justice",
-        "Environmental Sustainability",
-        "Global Business",
-        "Entrepreneurship",
-        "Innovation",
-        "Silicon Valley Technology",
-        "Healthcare",
-        "Biomedical Engineering",
-        "Computer Science",
-        "Software Development",
-        "Web Design",
-        "Finance",
-        "Marketing",
-        "Accounting",
-        "Economics",
-        "Management",
-        "Ethics",
-        "Biochemistry",
-        "Psychology",
-        "International Relations",
-        "Public Policy",
-        "Education",
-        "Arts",
-        "Theatre",
-        "Music",
-        "Literature",
-        "Philosophy",
-        "Religious Studies",
-        "Cultural Studies",
-        "Research",
-        "Law",
-        "Public Health",
-        "Medicine",
-        "Communications",
-        "Journalism",
-        "Media Studies",
-        "Community Service",
-        "Leadership",
-        "Consulting",
-        "Venture Capital",
-    ]
-    personality_traits = [
-        "Introverted",
-        "Extroverted",
-        "Sensing",
-        "Intuitive",
-        "Thinking",
-        "Feeling",
-        "Judging",
-        "Perceiving",
-        "Analytical",
-        "Creative",
-        "Detail-oriented",
-        "Big-picture",
-        "Ambitious",
-        "Adaptable",
-        "Collaborative",
-        "Independent",
-        "Persistent",
-        "Flexible",
-        "Empathetic",
-        "Logical",
-        "Innovative",
-        "Traditional",
-        "Risk-taking",
-        "Cautious",
-        "Organized",
-        "Spontaneous",
-        "Competitive",
-        "Cooperative",
-        "Reflective",
-        "Action-oriented",
-        "Patient",
-        "Decisive",
-        "Open-minded",
-        "Focused",
-        "Compassionate",
-        "Strategic",
-        "Resilient",
-        "Conscientious",
-        "Curious",
-        "Diligent",
-    ]
-
     # random sample for user
-    login_types = [random.choice(login_types) for _ in user_idxs]
-    majors = [random.choice(majors) for _ in user_idxs]
-    minors = [
-        random.choice(minors) if random.random() > 0.2 else None for _ in user_idxs
+    LOGIN_TYPES = [random.choice(LOGIN_TYPES) for _ in user_idxs]
+    MAJORS = [random.choice(MAJORS) for _ in user_idxs]
+    MINORS = [
+        random.choice(MINORS) if random.random() > 0.2 else None for _ in user_idxs
     ]
-    graduation_years = [random.choice(graduation_years) for _ in user_idxs]
-    interests = [
-        random.sample(interests, k=random.randint(1, len(interests) // 2))
+    GRADUATION_YEARS = [random.choice(GRADUATION_YEARS) for _ in user_idxs]
+    INTERESTS = [
+        random.sample(INTERESTS, k=random.randint(1, len(INTERESTS) // 2))
         for _ in user_idxs
     ]
-    personality_traits = [
+    PERSONALITY_TRAITS = [
         random.sample(
-            personality_traits, k=random.randint(1, len(personality_traits) // 2)
+            PERSONALITY_TRAITS, k=random.randint(1, len(PERSONALITY_TRAITS) // 2)
         )
         for _ in user_idxs
     ]
@@ -389,12 +184,12 @@ def create_users(user_idxs: list[int]) -> list[UserCreate]:
                         "text": f"""
         Here is some information about you:
 
-        Login Type: {login_types[user_idx]}
-        Major: {majors[user_idx]}
-        Minor: {minors[user_idx]}
-        Graduation Year: {graduation_years[user_idx]}
-        Interests: {', '.join(interests[user_idx])}
-        Personality Traits: {', '.join(personality_traits[user_idx])}
+        Login Type: {LOGIN_TYPES[user_idx]}
+        Major: {MAJORS[user_idx]}
+        Minor: {MINORS[user_idx]}
+        Graduation Year: {GRADUATION_YEARS[user_idx]}
+        INTERESTS: {', '.join(INTERESTS[user_idx])}
+        Personality Traits: {', '.join(PERSONALITY_TRAITS[user_idx])}
 
         Write a short bio for yourself.
         """,
@@ -426,12 +221,12 @@ def create_users(user_idxs: list[int]) -> list[UserCreate]:
                         "text": f"""
         Here is some information about you:
 
-        Login Type: {login_types[user_idx]}
-        Major: {majors[user_idx]}
-        Minor: {minors[user_idx]}
-        Graduation Year: {graduation_years[user_idx]}
-        Interests: {', '.join(interests[user_idx])}
-        Personality Traits: {', '.join(personality_traits[user_idx])}
+        Login Type: {LOGIN_TYPES[user_idx]}
+        Major: {MAJORS[user_idx]}
+        Minor: {MINORS[user_idx]}
+        Graduation Year: {GRADUATION_YEARS[user_idx]}
+        INTERESTS: {', '.join(INTERESTS[user_idx])}
+        Personality Traits: {', '.join(PERSONALITY_TRAITS[user_idx])}
 
         Write a paragraph or two describing your schedule.
         Be as detailed as possible, including times and days of the week.
@@ -450,12 +245,12 @@ def create_users(user_idxs: list[int]) -> list[UserCreate]:
 
     return [
         UserCreate(
-            login_type=login_types[user_idx],
-            major=majors[user_idx],
-            minor=minors[user_idx],
-            graduation_year=graduation_years[user_idx],
-            interests=interests[user_idx],
-            personality_traits=personality_traits[user_idx],
+            login_type=LOGIN_TYPES[user_idx],
+            major=MAJORS[user_idx],
+            minor=MINORS[user_idx],
+            graduation_year=GRADUATION_YEARS[user_idx],
+            INTERESTS=INTERESTS[user_idx],
+            PERSONALITY_TRAITS=PERSONALITY_TRAITS[user_idx],
             schedule=schedules[user_idx],
             bio=bios[user_idx],
         )
