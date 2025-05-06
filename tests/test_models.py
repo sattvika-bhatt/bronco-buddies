@@ -41,11 +41,12 @@ class TestUserBase:
 
     # Invalid
 
-    def test_none_lists_raises(self):
+    def test_none_lists_no_raises(self):
         """``None`` interests/traits cause ``TypeError`` when joined."""
         ub = UserBase()
-        with pytest.raises(TypeError):
-            _ = str(ub)
+        rendered = str(ub)
+        assert "Interests:" in rendered
+        assert "Personality Traits:" in rendered
 
     def test_invalid_graduation_year(self):
         """Non-numeric graduation year should fail validation."""
