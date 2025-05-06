@@ -1,8 +1,28 @@
 import uuid
 from datetime import datetime
+from typing import List
 
 from sqlalchemy import JSON, Column
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, Relationship, SQLModel
+
+
+class Match(SQLModel, table=True):
+    user_id_1: int | None = Field(default=None, foreign_key="user.id", primary_key=True)
+    user_id_2: int | None = Field(default=None, foreign_key="user.id", primary_key=True)
+
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(datetime.timezone.utc)
+    )
+
+    # explicit relationships to disambiguate the two FK columns
+    user1: "User" = Relationship(
+        back_populates="outgoing_matches",
+        sa_relationship_kwargs={"foreign_keys": "[Match.user_id_1]"},
+    )
+    user2: "User" = Relationship(
+        back_populates="incoming_matches",
+        sa_relationship_kwargs={"foreign_keys": "[Match.user_id_2]"},
+    )
 
 
 class UserBase(SQLModel):
@@ -42,6 +62,23 @@ class User(UserBase, table=True):
     hashed_password: str | None = Field(default=None)
     reset_token: str | None = Field(default=None)
     reset_token_expiry: datetime | None = Field(default=None)
+
+    # two directional collections that use the link table
+    outgoing_matches: List["Match"] = Relationship(
+        back_populates="user1",
+        sa_relationship_kwargs={"foreign_keys": "[Match.user_id_1]"},
+    )
+    incoming_matches: List["Match"] = Relationship(
+        back_populates="user2",
+        sa_relationship_kwargs={"foreign_keys": "[Match.user_id_2]"},
+    )
+
+    @property
+    def matches(self) -> list["User"]:
+        """Return all users matched with this user, regardless of direction."""
+        return [m.user2 for m in self.outgoing_matches] + [
+            m.user1 for m in self.incoming_matches
+        ]
 
 
 class UserCreate(UserBase):

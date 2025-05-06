@@ -428,11 +428,119 @@ def get_app():  # noqa: C901
             cls=page_ctnt,
         )
 
-    def matches_content():
-        return fh.Main(
-            fh.H1("Matches", cls=f"text-4xl font-bold text-{text_color} text-center"),
-            cls=page_ctnt,
-        )
+    def matches_content(session):
+        # Open a fresh session so the `curr_user` instance is bound;
+        # this prevents DetachedInstanceError when accessing lazy relationships.
+        with get_db_session() as db_session:
+            curr_user = get_curr_user(session)
+
+            if curr_user is None:
+                return fh.Main(
+                    fh.Div(
+                        fh.H1(
+                            "Matches",
+                            cls=f"text-4xl font-bold text-{text_color} text-center",
+                        ),
+                        fh.P(
+                            "You must be logged in to view your matches.",
+                            cls=f"text-{text_color} text-center",
+                        ),
+                        cls="flex grow flex-col items-center justify-start gap-8",
+                    ),
+                    cls=page_ctnt,
+                )
+
+            # Re‑attach the detached instance to the active Session so that
+            # relationship access is safe.
+            curr_user = db_session.merge(curr_user)
+
+            matches = curr_user.incoming_matches + curr_user.outgoing_matches
+            match_users = set()
+            for match in matches:
+                if match.user1.id != curr_user.id:
+                    match_users.add(match.user1)
+                if match.user2.id != curr_user.id:
+                    match_users.add(match.user2)
+            matches = list(match_users)
+
+            if not matches:
+                return fh.Main(
+                    fh.Div(
+                        fh.H1(
+                            "Matches",
+                            cls=f"text-4xl font-bold text-{text_color} text-center",
+                        ),
+                        fh.P(
+                            "No matches found yet.",
+                            cls=f"text-{text_color} text-center",
+                        ),
+                        cls="flex grow flex-col items-center justify-start gap-8",
+                    ),
+                    cls=page_ctnt,
+                )
+
+            return (
+                fh.Main(
+                    fh.Div(
+                        fh.H1(
+                            "Matches",
+                            cls=f"text-4xl font-bold text-{text_color} text-center mb-8",
+                        ),
+                        fh.Div(
+                            fh.Button(
+                                "←",
+                                id="carousel-left",
+                                cls="carousel-arrow left-0",
+                                onclick="carouselScroll(-1)",
+                            ),
+                            fh.Div(
+                                *[
+                                    fh.Div(
+                                        fh.Img(
+                                            src=u.profile_img or "/logo.png",
+                                            cls="w-40 h-40 object-cover rounded-full mx-auto mb-4",
+                                        ),
+                                        fh.H2(
+                                            u.username or u.email,
+                                            cls=f"text-xl font-semibold text-{text_color} text-center",
+                                        ),
+                                        fh.P(
+                                            u.email,
+                                            cls=f"text-md text-{text_color} text-center",
+                                        ),
+                                        cls="carousel-card flex flex-col items-center p-6 bg-white rounded-lg shadow-lg mx-2 min-w-[300px] max-w-[300px]",
+                                    )
+                                    for u in matches
+                                ],
+                                id="carousel-inner",
+                                cls="flex overflow-x-auto no-scrollbar transition-all duration-300",
+                            ),
+                            fh.Button(
+                                "→",
+                                id="carousel-right",
+                                cls="carousel-arrow right-0",
+                                onclick="carouselScroll(1)",
+                            ),
+                            cls="relative flex items-center justify-center w-full",
+                            style="max-width: 100vw;",
+                        ),
+                        cls="flex grow flex-col items-center justify-start gap-8",
+                    ),
+                    cls=page_ctnt,
+                ),
+                fh.Script(
+                    """
+                    function carouselScroll(dir) {
+                        const inner = document.getElementById('carousel-inner');
+                        if (!inner) return;
+                        const card = inner.querySelector('.carousel-card');
+                        if (!card) return;
+                        const scrollAmount = card.offsetWidth + 32; // card width + margin
+                        inner.scrollBy({ left: dir * scrollAmount, behavior: 'smooth' });
+                    }
+                    """
+                ),
+            )
 
     def signup_content(req, session):
         return fh.Main(
@@ -1029,7 +1137,7 @@ def get_app():  # noqa: C901
             fh.Title(f"{APP_NAME} | matches"),
             fh.Div(
                 nav(session),
-                matches_content(),
+                matches_content(session),
                 toast_container(),
                 footer(),
                 cls=main_page,
@@ -1157,10 +1265,10 @@ def get_app():  # noqa: C901
         if not session["minor"]:
             fh.add_toast(session, "Please select a minor.", "error")
             return None
-        if not session["interests"]:
+        if not json.loads(session["interests"]):
             fh.add_toast(session, "Please select at least one interest.", "error")
             return None
-        if not session["traits"]:
+        if not json.loads(session["traits"]):
             fh.add_toast(session, "Please select at least one trait.", "error")
             return None
         if not curr_user:
