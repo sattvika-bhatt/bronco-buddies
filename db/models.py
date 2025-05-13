@@ -44,7 +44,8 @@ class UserBase(SQLModel):
     # personal information
     interests: list[str] | None = Field(default=None, sa_column=Column(JSON))
     personality_traits: list[str] | None = Field(default=None, sa_column=Column(JSON))
-    schedule: str | None = Field(default=None)
+    schedule_img: str | None = Field(default=None)  # base64
+    schedule_text: str | None = Field(default=None)
     bio: str | None = Field(default=None)
 
     def __str__(self):
@@ -57,8 +58,8 @@ class UserBase(SQLModel):
         Graduation Year: {self.graduation_year}
         Interests: {', '.join(interests)}
         Personality Traits: {', '.join(traits)}
+        Schedule: {self.schedule_text}
         Bio: {self.bio}
-        Schedule: {self.schedule}
         """
 
 

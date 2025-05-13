@@ -21,7 +21,7 @@ from db.models import (
     UserRead,
 )
 from src.helpers import app as helpers_app
-from src.helpers import rank_users_cross_enc
+from src.helpers import rank_users, get_schedule_text
 from utils import (
     APP_NAME,
     GRADUATION_YEARS,
@@ -144,6 +144,12 @@ def get_app():  # noqa: C901
             req.scope["interests"] = sess.setdefault("interests", "")
         if "traits" not in sess:
             req.scope["traits"] = sess.setdefault("traits", "")
+        if "schedule_img" not in sess:
+            req.scope["schedule_img"] = sess.setdefault("schedule_img", "")
+        if "schedule_text" not in sess:
+            req.scope["schedule_text"] = sess.setdefault("schedule_text", "")
+        if "bio" not in sess:
+            req.scope["bio"] = sess.setdefault("bio", "")
 
     def _not_found(req, exc):
         return (
@@ -243,6 +249,38 @@ def get_app():  # noqa: C901
                 cls=f"indicator animate-spin {cls}",
             ),
         )
+
+    def schedule_img_container():
+        return fh.Label(
+            fh.Card(
+                fh.P("Drag and drop image(s) of your schedule here", cls=f"text-2xl font-bold text-{text_color}"),
+                fh.Input(
+                    id="schedule-img-upload",
+                    name="schedule_img_file",
+                    type="file",
+                    accept="image/*",
+                    hx_encoding="multipart/form-data",
+                    required=True, 
+                    hx_post="/set-schedule",
+                    hx_target="#schedule-img-preview",
+                    hx_swap="outerHTML",
+                    hx_trigger="change",
+                    hx_indicator="#schedule-img-preview, #schedule-img-loader",
+                    hx_disabled_elt="#schedule-img-upload, #find-matches-button",
+                ),
+                cls=f"flex flex-col justify-center items-start gap-8 {input_cls} p-8",
+            ),
+            fh.Div(
+                id="schedule-img-preview",
+            ),
+            spinner(
+                id="schedule-img-loader",
+                cls=f"absolute bottom-8 right-4 w-6 h-6 text-{text_color} hover:text-{text_hover_color}",
+            ),
+            id="schedule-img-container",
+            hx_swap_oob="true",
+            cls="relative"
+        ),
 
     # ui layout
     def nav(session, show_auth=True):
@@ -404,6 +442,26 @@ def get_app():  # noqa: C901
                             id="traits",
                             cls="w-full flex flex-col gap-4",
                         ),
+                        schedule_img_container(),
+                        fh.Label(
+                            fh.Textarea(
+                                id="bio",
+                                placeholder="Bio...",
+                                rows=5,
+                                hx_post="/set-bio",
+                                hx_target="this",
+                                hx_swap="none",
+                                hx_trigger="change, keyup delay:200ms changed",
+                                hx_indicator="#bio-loader",
+                                hx_disabled_elt="#find-matches-button",
+                                cls=f"{input_cls} p-4 resize-none",
+                            ),
+                            spinner(
+                                id="bio-loader",
+                                cls=f"absolute bottom-2 right-2 w-6 h-6 text-{text_color} hover:text-{text_hover_color}",
+                            ),
+                            cls="relative"
+                        ),
                         fh.Button(
                             fh.P(
                                 "Please someone good...",
@@ -438,26 +496,21 @@ def get_app():  # noqa: C901
             if curr_user is None:
                 return fh.Main(
                     fh.Div(
-                        fh.H1(
-                            "Matches",
-                            cls=f"text-4xl font-bold text-{text_color} text-center",
-                        ),
                         fh.P(
                             "You must be logged in to view your matches.",
                             cls=f"text-{text_color} text-center",
                         ),
-                        cls="flex grow flex-col items-center justify-start gap-8",
+                        cls="flex grow flex-col justify-center items-center gap-8",
                     ),
                     cls=page_ctnt,
                 )
 
             curr_user = db_session.merge(curr_user)  # make relationships accessible
-
             if curr_user.waiting_for_match:
                 fn = (
-                    rank_users_cross_enc.local
+                    rank_users.local
                     if modal.is_local()
-                    else rank_users_cross_enc.remote
+                    else rank_users.remote
                 )
                 ranked_users = fn(
                     curr_user,
@@ -485,15 +538,11 @@ def get_app():  # noqa: C901
             if not matches:
                 return fh.Main(
                     fh.Div(
-                        fh.H1(
-                            "Matches",
-                            cls=f"text-4xl font-bold text-{text_color} text-center",
-                        ),
                         fh.P(
                             "No matches found yet.",
                             cls=f"text-{text_color} text-center",
                         ),
-                        cls="flex grow flex-col items-center justify-start gap-8",
+                        cls="flex grow flex-col justify-center items-center gap-8",
                     ),
                     cls=page_ctnt,
                 )
@@ -559,6 +608,14 @@ def get_app():  # noqa: C901
                                                     if u.personality_traits
                                                     else "None",
                                                     cls=f"text-sm italic text-{text_color}",
+                                                ),
+                                                fh.Img(
+                                                    src=u.schedule_img,
+                                                    cls="w-40 h-40 object-cover",
+                                                ),
+                                                fh.P(
+                                                    f"Bio: {u.bio}",
+                                                    cls=f"text-sm text-{text_color}",
                                                 ),
                                                 cls="flex flex-col justify-center items-start gap-4",
                                             ),
@@ -1084,7 +1141,7 @@ def get_app():  # noqa: C901
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                cwd=PARENT_PATH / "Python-Antivirus",
+                cwd=PARENT_PATH / "Python-Antivirus" if modal.is_local() else "/root/Python-Antivirus",
             )
             scan_result = result.stdout.strip().lower()
             if scan_result == "infected":
@@ -1095,7 +1152,7 @@ def get_app():  # noqa: C901
         return {"success": image_base64}
 
     def validate_image_file(
-        image_file,
+        image_file: fh.UploadFile | None,
     ) -> dict[str, str]:
         if image_file is not None:
             valid_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff"}
@@ -1309,10 +1366,50 @@ def get_app():  # noqa: C901
         session["traits"] = json.dumps(lst_traits)
         return None
 
+    @f_app.post("/set-schedule")
+    def set_schedule(session, schedule_img_file: fh.UploadFile):
+        res = validate_image_file(schedule_img_file)
+        if "error" in res.keys():
+            fh.add_toast(session, res["error"], "error")
+            return (
+                fh.Div(
+                    id="schedule-img-preview",
+                ),
+                schedule_img_container(),
+            )
+        
+        schedule_img = f"data:image/png;base64,{res['success']}"
+        is_valid_schedule, schedule_text = (
+            get_schedule_text.local(schedule_img)
+            if modal.is_local()
+            else get_schedule_text.remote(schedule_img)
+        )
+        if not is_valid_schedule:
+            fh.add_toast(session, "Invalid schedule image.", "error")
+            return (
+                fh.Div(
+                    id="schedule-img-preview",
+                ),
+                schedule_img_container(),
+            )
+        session["schedule_img"] = schedule_img
+        session["schedule_text"] = schedule_text
+        return (
+            fh.Img(
+                src=schedule_img,
+                id="schedule-img-preview",
+                cls=f"w-60 h-60 md:w-96 md:h-96 object-cover",
+            ),
+        )
+
+    @f_app.post("/set-bio")
+    def set_bio(session, bio: str):
+        session["bio"] = bio
+        return None
+
     ## find matches
     @f_app.post("/find-matches")
     def find_matches(session):
-        curr_user = get_curr_user(session)
         if not session["graduation_year"]:
             fh.add_toast(session, "Please select a graduation year.", "error")
             return None
@@ -1328,6 +1425,17 @@ def get_app():  # noqa: C901
         if not json.loads(session["traits"]):
             fh.add_toast(session, "Please select at least one trait.", "error")
             return None
+        if not session["schedule_img"]:
+            fh.add_toast(session, "Please upload an image of your schedule.", "error")
+            return None
+        if not session["schedule_text"]:
+            fh.add_toast(session, "Please reupload your schedule image.", "error")
+            return None
+        if not session["bio"]:
+            fh.add_toast(session, "Please write a bio.", "error")
+            return None
+
+        curr_user = get_curr_user(session)
         if not curr_user:
             return fh.Redirect("/signup")
         with get_db_session() as db_session:
@@ -1337,6 +1445,9 @@ def get_app():  # noqa: C901
             curr_user.minor = session["minor"]
             curr_user.interests = json.loads(session["interests"])
             curr_user.personality_traits = json.loads(session["traits"])
+            curr_user.schedule_img = session["schedule_img"]
+            curr_user.schedule_text = session["schedule_text"]
+            curr_user.bio = session["bio"]
             curr_user.waiting_for_match = True
             db_session.commit()
             db_session.refresh(curr_user)
@@ -1345,6 +1456,9 @@ def get_app():  # noqa: C901
         session["minor"] = None
         session["interests"] = None
         session["traits"] = None
+        session["schedule_img"] = None
+        session["schedule_text"] = None
+        session["bio"] = None
         return fh.Redirect("/matches")
 
     ## overlay
@@ -1633,7 +1747,7 @@ def get_app():  # noqa: C901
                             hx_post="/user/settings/update-preview",
                             hx_target="#profile-img-preview",
                             hx_swap="outerHTML",
-                            hx_trigger="change delay:200ms changed",
+                            hx_trigger="change",
                             hx_indicator="#profile-img-preview, #profile-img-loader",
                             hx_disabled_elt="#new-profile-img-upload",
                             hx_encoding="multipart/form-data",
