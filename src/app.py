@@ -1,5 +1,6 @@
 import base64
 import io
+import json
 import os
 import smtplib
 import ssl
@@ -15,13 +16,21 @@ from pathlib import Path
 import modal
 
 from db.models import (
+    Match,
     User,
     UserRead,
 )
+from src.helpers import app as helpers_app
+from src.helpers import rank_users_cross_enc
 from utils import (
     APP_NAME,
+    GRADUATION_YEARS,
+    INTERESTS,
+    MAJORS,
+    MINORS,
     MINUTES,
     PARENT_PATH,
+    PERSONALITY_TRAITS,
     PYTHON_VERSION,
     SECRETS,
 )
@@ -52,6 +61,7 @@ FE_IMAGE = (
 )
 
 app = modal.App(APP_NAME)
+app.include(helpers_app)
 
 # -----------------------------------------------------------------------------
 
@@ -124,6 +134,16 @@ def get_app():  # noqa: C901
             req.scope["session_id"] = sess.setdefault("session_id", str(uuid.uuid4()))
         if "user_uuid" not in sess:
             req.scope["user_uuid"] = sess.setdefault("user_uuid", "")
+        if "graduation_year" not in sess:
+            req.scope["graduation_year"] = sess.setdefault("graduation_year", "")
+        if "major" not in sess:
+            req.scope["major"] = sess.setdefault("major", "")
+        if "minor" not in sess:
+            req.scope["minor"] = sess.setdefault("minor", "")
+        if "interests" not in sess:
+            req.scope["interests"] = sess.setdefault("interests", "")
+        if "traits" not in sess:
+            req.scope["traits"] = sess.setdefault("traits", "")
 
     def _not_found(req, exc):
         return (
@@ -278,15 +298,306 @@ def get_app():  # noqa: C901
 
     def home_content():
         return fh.Main(
-            fh.H1("Home", cls=f"text-4xl font-bold text-{text_color} text-center"),
+            fh.Div(
+                fh.H1(
+                    "No friends? Find some here!",
+                    cls=f"text-4xl font-bold text-{text_color} text-center",
+                ),
+                fh.Form(
+                    fh.Div(
+                        fh.Select(
+                            fh.Option(
+                                "-- select graduation year --",
+                                disabled="",
+                                selected="",
+                                value="",
+                            ),
+                            *[fh.Option(year, value=year) for year in GRADUATION_YEARS],
+                            id="graduation-year",
+                            name="graduation_year",
+                            hx_post="/set-graduation-year",
+                            hx_target="this",
+                            hx_swap="none",
+                            cls=f"w-full {input_cls}",
+                            required=True,
+                        ),
+                        fh.Select(
+                            fh.Option(
+                                "-- select major --", disabled="", selected="", value=""
+                            ),
+                            *[fh.Option(major, value=major) for major in MAJORS],
+                            id="major",
+                            name="major",
+                            hx_post="/set-major",
+                            hx_target="this",
+                            hx_swap="none",
+                            cls=f"w-full {input_cls}",
+                            required=True,
+                        ),
+                        fh.Select(
+                            fh.Option(
+                                "-- select minor --", disabled="", selected="", value=""
+                            ),
+                            *[fh.Option(minor, value=minor) for minor in MINORS],
+                            id="minor",
+                            name="minor",
+                            hx_post="/set-minor",
+                            hx_target="this",
+                            hx_swap="none",
+                            cls=f"w-full {input_cls}",
+                            required=True,
+                        ),
+                        fh.Div(
+                            fh.H2(
+                                "Interests", cls=f"text-2xl font-bold text-{text_color}"
+                            ),
+                            fh.Div(
+                                *[
+                                    fh.Div(
+                                        fh.Label(
+                                            fh.Input(
+                                                type="checkbox",
+                                                name="interest",
+                                                value=interest,
+                                                hx_post="/set-interest",
+                                                hx_target="this",
+                                                hx_swap="none",
+                                            ),
+                                            interest,
+                                            cls=f"text-{text_color} flex justify-start items-center gap-1",
+                                        ),
+                                        cls="flex justify-start items-center",
+                                    )
+                                    for interest in INTERESTS
+                                ],
+                                cls="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2",
+                            ),
+                            id="interests",
+                            cls="w-full flex flex-col gap-4",
+                        ),
+                        fh.Div(
+                            fh.H2(
+                                "Personality Traits",
+                                cls=f"text-2xl font-bold text-{text_color}",
+                            ),
+                            fh.Div(
+                                *[
+                                    fh.Div(
+                                        fh.Label(
+                                            fh.Input(
+                                                type="checkbox",
+                                                name="trait",
+                                                value=trait,
+                                                hx_post="/set-trait",
+                                                hx_target="this",
+                                                hx_swap="none",
+                                            ),
+                                            trait,
+                                            cls=f"text-{text_color} flex justify-start items-center gap-1",
+                                        ),
+                                        cls="flex justify-start items-center",
+                                    )
+                                    for trait in PERSONALITY_TRAITS
+                                ],
+                                cls="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2",
+                            ),
+                            id="traits",
+                            cls="w-full flex flex-col gap-4",
+                        ),
+                        fh.Button(
+                            fh.P(
+                                "Please someone good...",
+                                id="find-matches-button-text",
+                                cls=f"hide-when-loading text-{text_color} hover:text-{text_button_hover_color}",
+                            ),
+                            spinner(
+                                id="find-matches-loader",
+                                cls=f"w-6 h-6 text-{text_color} hover:text-{text_button_hover_color}",
+                            ),
+                            id="find-matches-button",
+                            type="submit",
+                            cls=f"w-full {click_button} {rounded} p-3",
+                        ),
+                        cls="w-full flex flex-col gap-4",
+                    ),
+                    hx_post="/find-matches",
+                    hx_target="this",
+                    hx_swap="none",
+                    hx_indicator="#find-matches-button-text, #find-matches-loader",
+                    hx_disabled_elt="#find-matches-button",
+                    cls=f"w-full md:w-2/3 flex flex-col justify-center items-center gap-8 {input_cls} p-8",
+                ),
+                cls="w-full flex flex-col justify-center items-center gap-8",
+            ),
             cls=page_ctnt,
         )
 
-    def matches_content():
-        return fh.Main(
-            fh.H1("Matches", cls=f"text-4xl font-bold text-{text_color} text-center"),
-            cls=page_ctnt,
-        )
+    def matches_content(session):
+        with get_db_session() as db_session:
+            curr_user = get_curr_user(session)
+            if curr_user is None:
+                return fh.Main(
+                    fh.Div(
+                        fh.H1(
+                            "Matches",
+                            cls=f"text-4xl font-bold text-{text_color} text-center",
+                        ),
+                        fh.P(
+                            "You must be logged in to view your matches.",
+                            cls=f"text-{text_color} text-center",
+                        ),
+                        cls="flex grow flex-col items-center justify-start gap-8",
+                    ),
+                    cls=page_ctnt,
+                )
+
+            curr_user = db_session.merge(curr_user)  # make relationships accessible
+
+            if curr_user.waiting_for_match:
+                fn = (
+                    rank_users_cross_enc.local
+                    if modal.is_local()
+                    else rank_users_cross_enc.remote
+                )
+                ranked_users = fn(
+                    curr_user,
+                    db_session.exec(
+                        select(User).where(User.uuid != session["user_uuid"])
+                    ).all(),
+                )
+                for user in ranked_users:
+                    match = Match(user1=curr_user, user2=user)
+                    db_session.add(match)
+                curr_user.waiting_for_match = False
+                db_session.commit()
+                db_session.refresh(curr_user)
+
+            matches = curr_user.incoming_matches + curr_user.outgoing_matches
+            match_users = []
+            seen_user_ids: set[int] = set()
+            for m in matches:
+                other = m.user1 if m.user1.id != curr_user.id else m.user2
+                if other.id not in seen_user_ids:
+                    match_users.append(other)
+                    seen_user_ids.add(other.id)
+            matches = match_users
+
+            if not matches:
+                return fh.Main(
+                    fh.Div(
+                        fh.H1(
+                            "Matches",
+                            cls=f"text-4xl font-bold text-{text_color} text-center",
+                        ),
+                        fh.P(
+                            "No matches found yet.",
+                            cls=f"text-{text_color} text-center",
+                        ),
+                        cls="flex grow flex-col items-center justify-start gap-8",
+                    ),
+                    cls=page_ctnt,
+                )
+            return (
+                fh.Main(
+                    fh.Div(
+                        fh.H1(
+                            "Matches",
+                            cls=f"text-4xl font-bold text-{text_color} text-center",
+                        ),
+                        fh.Div(
+                            fh.P(
+                                "←",
+                                id="carousel-left",
+                                cls=f"carousel-arrow text-2xl h-full text-{text_color} hover:text-{text_hover_color}",
+                                onclick="carouselScroll(-1)",
+                            ),
+                            fh.Div(
+                                *[
+                                    fh.Div(
+                                        fh.Div(
+                                            fh.Img(
+                                                src=u.profile_img or "/logo.png",
+                                                cls="w-64 h-64 object-cover rounded-full",
+                                            ),
+                                            fh.H2(
+                                                u.username or u.email,
+                                                cls=f"text-2xl font-semibold text-{text_color} text-center",
+                                            ),
+                                            fh.P(
+                                                u.email if u.username else "",
+                                                cls=f"text-sm text-{text_color} text-center",
+                                            ),
+                                            fh.Div(
+                                                fh.P(
+                                                    f"Major: {u.major or 'Not specified'}",
+                                                    cls=f"text-sm text-{text_color}",
+                                                ),
+                                                fh.P(
+                                                    f"Minor: {u.minor or 'Not specified'}",
+                                                    cls=f"text-sm text-{text_color}",
+                                                ),
+                                                fh.P(
+                                                    f"Graduation: {u.graduation_year or 'Not specified'}",
+                                                    cls=f"text-sm text-{text_color}",
+                                                ),
+                                                fh.P(
+                                                    "Interests:",
+                                                    cls=f"text-sm font-semibold text-{text_color}",
+                                                ),
+                                                fh.P(
+                                                    ", ".join(u.interests)
+                                                    if u.interests
+                                                    else "None",
+                                                    cls=f"text-sm italic text-{text_color}",
+                                                ),
+                                                fh.P(
+                                                    "Personality Traits:",
+                                                    cls=f"text-sm font-semibold text-{text_color}",
+                                                ),
+                                                fh.P(
+                                                    ", ".join(u.personality_traits)
+                                                    if u.personality_traits
+                                                    else "None",
+                                                    cls=f"text-sm italic text-{text_color}",
+                                                ),
+                                                cls="flex flex-col justify-center items-start gap-4",
+                                            ),
+                                            cls=f"w-full md:w-1/3 flex-col justify-center items-center gap-4 {input_cls} p-8",
+                                        ),
+                                        cls="carousel-card w-full flex-shrink-0 flex justify-center items-center",
+                                    )
+                                    for u in matches
+                                ],
+                                id="carousel-inner",
+                                cls="flex overflow-x-hidden no-scrollbar",
+                                style="scroll-snap-type: x mandatory;",
+                            ),
+                            fh.P(
+                                "→",
+                                id="carousel-right",
+                                cls=f"carousel-arrow text-2xl h-full text-{text_color} hover:text-{text_hover_color}",
+                                onclick="carouselScroll(1)",
+                            ),
+                            cls="w-full flex items-center justify-center gap-2",
+                        ),
+                        cls="w-full flex flex-col items-center justify-start gap-16",
+                    ),
+                    cls=page_ctnt,
+                ),
+                fh.Script(
+                    """
+                    function carouselScroll(dir) {
+                        const inner = document.getElementById('carousel-inner');
+                        if (!inner) return;
+                        const card = inner.querySelector('.carousel-card');
+                        if (!card) return;
+                        const offset = card.offsetWidth;
+                        const newX = inner.scrollLeft + dir * offset;
+                        inner.scrollTo({ left: newX, behavior: 'smooth' });
+                    }
+                    """
+                ),
+            )
 
     def signup_content(req, session):
         return fh.Main(
@@ -883,7 +1194,7 @@ def get_app():  # noqa: C901
             fh.Title(f"{APP_NAME} | matches"),
             fh.Div(
                 nav(session),
-                matches_content(),
+                matches_content(session),
                 toast_container(),
                 footer(),
                 cls=main_page,
@@ -962,6 +1273,80 @@ def get_app():  # noqa: C901
         )
 
     # routes
+    ## set form inputs in session state
+    @f_app.post("/set-graduation-year")
+    def set_graduation_year(session, graduation_year: int):
+        session["graduation_year"] = graduation_year
+        return None
+
+    @f_app.post("/set-major")
+    def set_major(session, major: str):
+        session["major"] = major
+        return None
+
+    @f_app.post("/set-minor")
+    def set_minor(session, minor: str):
+        session["minor"] = minor
+        return None
+
+    @f_app.post("/set-interest")
+    def set_interest(session, interest: str):
+        if not session["interests"]:
+            session["interests"] = json.dumps([interest])
+        lst_interests = json.loads(session["interests"])
+        if interest not in lst_interests:
+            lst_interests.append(interest)
+        session["interests"] = json.dumps(lst_interests)
+        return None
+
+    @f_app.post("/set-trait")
+    def set_trait(session, trait: str):
+        if not session["traits"]:
+            session["traits"] = json.dumps([trait])
+        lst_traits = json.loads(session["traits"])
+        if trait not in lst_traits:
+            lst_traits.append(trait)
+        session["traits"] = json.dumps(lst_traits)
+        return None
+
+    ## find matches
+    @f_app.post("/find-matches")
+    def find_matches(session):
+        curr_user = get_curr_user(session)
+        if not session["graduation_year"]:
+            fh.add_toast(session, "Please select a graduation year.", "error")
+            return None
+        if not session["major"]:
+            fh.add_toast(session, "Please select a major.", "error")
+            return None
+        if not session["minor"]:
+            fh.add_toast(session, "Please select a minor.", "error")
+            return None
+        if not json.loads(session["interests"]):
+            fh.add_toast(session, "Please select at least one interest.", "error")
+            return None
+        if not json.loads(session["traits"]):
+            fh.add_toast(session, "Please select at least one trait.", "error")
+            return None
+        if not curr_user:
+            return fh.Redirect("/signup")
+        with get_db_session() as db_session:
+            curr_user = db_session.merge(curr_user)
+            curr_user.graduation_year = session["graduation_year"]
+            curr_user.major = session["major"]
+            curr_user.minor = session["minor"]
+            curr_user.interests = json.loads(session["interests"])
+            curr_user.personality_traits = json.loads(session["traits"])
+            curr_user.waiting_for_match = True
+            db_session.commit()
+            db_session.refresh(curr_user)
+        session["graduation_year"] = None
+        session["major"] = None
+        session["minor"] = None
+        session["interests"] = None
+        session["traits"] = None
+        return fh.Redirect("/matches")
+
     ## overlay
     @f_app.get("/user/overlay/show")
     def overlay_show(session):
@@ -1063,12 +1448,17 @@ def get_app():  # noqa: C901
             if not db_user:
                 return fh.Redirect("/signup")
             else:
+                if not db_user.hashed_password:
+                    fh.add_toast(
+                        session, "This account uses a different login method.", "error"
+                    )
+                    return None
                 if not pbkdf2_sha256.verify(password, db_user.hashed_password):
                     fh.add_toast(session, "Incorrect credentials", "error")
                     return None
                 else:
                     session["user_uuid"] = db_user.uuid
-                    return fh.Redirect("/")
+                    return fh.Redirect("/matches")
 
     @f_app.post("/auth/signup")
     def email_signup(session, email: str, password: str):
@@ -1100,7 +1490,7 @@ def get_app():  # noqa: C901
                 db_session.commit()
                 db_session.refresh(db_user)
                 session["user_uuid"] = db_user.uuid
-                return fh.Redirect("/")
+                return fh.Redirect("/matches")
 
     @f_app.post("/auth/forgot-password")
     def forgot_password(session, email: str):
