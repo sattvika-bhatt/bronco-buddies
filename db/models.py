@@ -41,6 +41,10 @@ class User(SQLModel, table=True):
         back_populates="user",
         sa_relationship_kwargs={"single_parent": True},
     )
+    feed_messages: List["FeedMessage"] = Relationship(
+        back_populates="user",
+        cascade_delete=True,
+    )
     waiting_for_match: bool | None = Field(default=False)
 
     # two directional collections that use the link table
@@ -85,3 +89,15 @@ class Schedule(SQLModel, table=True):
     text: str | None = Field(default=None)
 
     user: User | None = Relationship(back_populates="schedule")
+
+
+class FeedMessage(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    message: str | None = Field(default=None)
+
+    created_at: datetime | None = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+    
+    user_id: int | None = Field(default=None, foreign_key="user.id")
+    user: User | None = Relationship(back_populates="feed_messages")

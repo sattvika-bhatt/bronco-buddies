@@ -16,12 +16,13 @@ from pathlib import Path
 import modal
 
 from db.models import (
+    FeedMessage,
     Match,
     Schedule,
     User,
 )
 from src.helpers import app as helpers_app
-from src.helpers import rank_users, get_schedule_text
+from src.helpers import get_schedule_text, rank_users
 from utils import (
     APP_NAME,
     GRADUATION_YEARS,
@@ -86,7 +87,7 @@ def get_app():  # noqa: C901
     medium_text = "text-lg"
     small_text = "text-md"
     xsmall_text = "text-sm"
-    
+
     text_color = "stone-600"
     text_hover_color = "stone-500"  # for neutral-colored links
     text_button_hover_color = "stone-700"  # for colored buttons
@@ -139,7 +140,9 @@ def get_app():  # noqa: C901
     # FastHTML setup
     def before(req, session):
         if "session_id" not in session:
-            req.scope["session_id"] = session.setdefault("session_id", str(uuid.uuid4()))
+            req.scope["session_id"] = session.setdefault(
+                "session_id", str(uuid.uuid4())
+            )
         if "user_uuid" not in session:
             req.scope["user_uuid"] = session.setdefault("user_uuid", "")
         if "graduation_year" not in session:
@@ -157,7 +160,9 @@ def get_app():  # noqa: C901
         if "bio" not in session:
             req.scope["bio"] = session.setdefault("bio", "")
         if "waiting_for_match" not in session:
-            req.scope["waiting_for_match"] = session.setdefault("waiting_for_match", False)
+            req.scope["waiting_for_match"] = session.setdefault(
+                "waiting_for_match", False
+            )
 
     def _not_found(session):
         return (
@@ -176,7 +181,7 @@ def get_app():  # noqa: C901
         )
 
     f_app, _ = fh.fast_app(
-        ws_hdr=True,
+        exts="ws",
         before=fh.Beforeware(
             before,
             skip=[
@@ -210,6 +215,7 @@ def get_app():  # noqa: C901
         ],
         boost=True,
     )
+
     f_app.add_middleware(
         CORSMiddleware,
         allow_origins=["/"],
@@ -217,6 +223,9 @@ def get_app():  # noqa: C901
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # feed
+    feed_users = {}
 
     # db
     engine = create_engine(url=os.getenv("DATABASE_URL"), echo=False)
@@ -257,47 +266,54 @@ def get_app():  # noqa: C901
         )
 
     def schedule_img_container():
-        return fh.Label(
-            fh.Card(
-                fh.P("Drag and drop image(s) of your weekly schedule here", cls=f"{large_text} text-{text_color}"),
-                fh.Input(
-                    id="schedule-img-upload",
-                    name="schedule_img_file",
-                    type="file",
-                    accept="image/*",
-                    hx_encoding="multipart/form-data",
-                    required=True, 
-                    hx_post="/set-schedule",
-                    hx_target="#schedule-img-preview",
-                    hx_swap="outerHTML",
-                    hx_trigger="change",
-                    hx_indicator="#schedule-img-preview, #schedule-img-loader",
-                    hx_disabled_elt="#schedule-img-upload, #find-matches-button",
+        return (
+            fh.Label(
+                fh.Card(
+                    fh.P(
+                        "Drag and drop image(s) of your weekly schedule here",
+                        cls=f"{large_text} text-{text_color}",
+                    ),
+                    fh.Input(
+                        id="schedule-img-upload",
+                        name="schedule_img_file",
+                        type="file",
+                        accept="image/*",
+                        hx_encoding="multipart/form-data",
+                        required=True,
+                        hx_post="/set-schedule",
+                        hx_target="#schedule-img-preview",
+                        hx_swap="outerHTML",
+                        hx_trigger="change",
+                        hx_indicator="#schedule-img-preview, #schedule-img-loader",
+                        hx_disabled_elt="#schedule-img-upload, #find-matches-button",
+                    ),
+                    cls=f"{input_cls} p-8 flex flex-col justify-center items-start gap-8",
                 ),
-                cls=f"{input_cls} p-8 flex flex-col justify-center items-start gap-8",
+                fh.Div(
+                    id="schedule-img-preview",
+                ),
+                spinner(
+                    id="schedule-img-loader",
+                    cls=f"absolute bottom-8 right-4 w-6 h-6 text-{text_color} hover:text-{text_hover_color}",
+                ),
+                id="schedule-img-container",
+                hx_swap_oob="true",
+                cls="w-full relative",
             ),
-            fh.Div(
-                id="schedule-img-preview",
-            ),
-            spinner(
-                id="schedule-img-loader",
-                cls=f"absolute bottom-8 right-4 w-6 h-6 text-{text_color} hover:text-{text_hover_color}",
-            ),
-            id="schedule-img-container",
-            hx_swap_oob="true",
-            cls="w-full relative"
-        ),
+        )
 
-    def toast_container(message: str="", type: str="", hidden: bool = True):
-        return fh.Div(
-            fh.P(message, cls=f"text-{text_color} text-center"),
-            id="toast-container",
-            hx_swap_oob="true", 
-            cls=f"z-10 absolute top-4 left-1/2 -translate-x-1/2 w-2/3 md:w-1/3 p-4 {rounded} {shadow} " + 
-                ("hidden " if hidden else "") + 
-                f"bg-{click_color if type == 'success' else click_danger_color if type == 'error' else click_neutral_color if type == 'info' else ''}",
-        ), fh.Script(
-            """
+    def toast_container(message: str = "", type: str = "", hidden: bool = True):
+        return (
+            fh.Div(
+                fh.P(message, cls=f"text-{text_color} text-center"),
+                id="toast-container",
+                hx_swap_oob="true",
+                cls=f"z-10 absolute top-4 left-1/2 -translate-x-1/2 w-2/3 md:w-1/3 p-4 {rounded} {shadow} "
+                + ("hidden " if hidden else "")
+                + f"bg-{click_color if type == 'success' else click_danger_color if type == 'error' else click_neutral_color if type == 'info' else ''}",
+            ),
+            fh.Script(
+                """
             setTimeout(() => {
                 const toast = document.getElementById('toast-container');
                 if (toast) {
@@ -305,7 +321,92 @@ def get_app():  # noqa: C901
                 }
             }, 3000);
             """
-        ),
+            ),
+        )
+
+    def feed_msgs():
+        with get_db_session() as db_session:
+            messages = (
+                db_session.query(FeedMessage)
+                .order_by(FeedMessage.created_at.asc())
+                .all()
+            )
+            return fh.Div(
+                *[
+                    fh.Div(
+                        fh.Div(
+                            fh.Div(
+                                fh.P(
+                                    f"{m.user.username}: ",
+                                    cls=f"{small_text} font-semibold text-{text_color} break-all",
+                                ),
+                                fh.P(
+                                    m.created_at.strftime("%b %d, %I:%M %p"),
+                                    cls=f"{small_text} text-{text_color} opacity-75",
+                                ),
+                                cls="flex justify-between items-center gap-4",
+                            ),
+                            fh.P(
+                                m.message,
+                                cls=f"{small_text} text-{text_color} break-all",
+                            ),
+                            cls="flex flex-col gap-1 wrap-break-word",
+                        ),
+                        cls=f"max-w-full {input_cls} p-4 flex grow justify-between items-start gap-4",
+                    )
+                    for m in messages
+                ]
+                if messages
+                else [
+                    fh.Div(
+                        fh.P(
+                            "No messages yet. Be the first to say something!",
+                            cls=f"{medium_text} text-{text_color} text-center",
+                        ),
+                        cls=f"w-full {input_cls} p-4 flex justify-center items-center",
+                    )
+                ],
+                id="msg-list",
+                cls="w-full flex flex-col justify-center items-start gap-4",
+            )
+
+    def feed_input():
+        return fh.Textarea(
+            id="msg",
+            placeholder="Type your message",
+            rows=5,
+            autofocus=True,
+            value="",
+            cls=f"{input_cls} p-4 resize-none",
+        )
+
+    def settings_profile_img(src: str):
+        return fh.Img(
+            src=src,
+            cls=f"hide-when-loading w-20 h-20 object-cover rounded-full {shadow} cursor-pointer hover:{img_hover}",
+            id="profile-img-preview",
+        )
+
+    def delete_account_button():
+        return (
+            fh.Button(
+                fh.P(
+                    "Delete Account",
+                    id="delete-account-button-text",
+                    cls=f"hide-when-loading text-{text_color} hover:text-{text_button_hover_color}",
+                ),
+                spinner(
+                    id="delete-account-loader",
+                    cls=f"w-6 h-6 text-{text_color} hover:text-{text_button_hover_color}",
+                ),
+                id="delete-account-button",
+                hx_delete="/user/settings/delete-account",
+                hx_confirm="Are you sure you want to delete your account? This action cannot be undone.",
+                hx_indicator="#delete-account-button-text, #delete-account-loader",
+                hx_disabled_elt="#delete-account-button",
+                cls=f"w-full flex justify-center items-center {click_danger_button} {rounded} {shadow} p-3",
+            ),
+        )
 
     # ui layout
     def nav(session, suffix="", show_auth=True):
@@ -325,7 +426,7 @@ def get_app():  # noqa: C901
                     cls=f"flex justify-center items-center gap-2 hover:{img_hover} hover:text-{text_hover_color}",
                 ),
             ),
-            overlay_close(session)
+            overlay(session)
             if curr_user and show_auth
             else fh.Div(
                 fh.A(
@@ -346,7 +447,7 @@ def get_app():  # noqa: C901
             )
             if show_auth
             else None,
-            cls="relative flex justify-between items-center px-8 py-16 md:p-20",
+            cls="relative px-8 py-16 md:p-20 flex justify-between items-center gap-8",
         )
 
     def home_content():
@@ -389,7 +490,10 @@ def get_app():  # noqa: C901
                         ),
                         fh.Select(
                             fh.Option(
-                                "-- select minor (optional) --", disabled="", selected="", value=""
+                                "-- select minor (optional) --",
+                                disabled="",
+                                selected="",
+                                value="",
                             ),
                             *[fh.Option(minor, value=minor) for minor in MINORS],
                             id="minor",
@@ -401,9 +505,7 @@ def get_app():  # noqa: C901
                             required=True,
                         ),
                         fh.Div(
-                            fh.H2(
-                                "Interests", cls=f"{large_text} text-{text_color}"
-                            ),
+                            fh.H2("Interests", cls=f"{large_text} text-{text_color}"),
                             fh.Div(
                                 *[
                                     fh.Div(
@@ -475,7 +577,7 @@ def get_app():  # noqa: C901
                                 id="bio-loader",
                                 cls=f"absolute bottom-2 right-2 w-6 h-6 text-{text_color} hover:text-{text_hover_color}",
                             ),
-                            cls="w-full relative"
+                            cls="w-full relative",
                         ),
                         fh.Button(
                             fh.P(
@@ -513,27 +615,31 @@ def get_app():  # noqa: C901
                 return fh.Main(
                     fh.P(
                         "You must be logged in to view your matches.",
-                        cls=f"text-{text_color} text-center",
+                        cls=f"{large_text} text-{text_color} text-center",
                     ),
                     cls=page_ctnt,
                 )
 
             curr_user = db_session.merge(curr_user)  # make relationships accessible
             if curr_user.waiting_for_match:
-                fn = (
-                    rank_users.local
-                    if modal.is_local()
-                    else rank_users.remote
-                )
-                
-                users = db_session.exec(select(User).where(User.uuid != curr_user.uuid).limit(max_matches).order_by(func.random())).all()
+                fn = rank_users.local if modal.is_local() else rank_users.remote
+
+                users = db_session.exec(
+                    select(User)
+                    .where(User.uuid != curr_user.uuid)
+                    .limit(max_matches)
+                    .order_by(func.random())
+                ).all()
                 if len(users) > 0:
                     user_strs = [str(u) for u in users]
                     ranked_user_strs = fn(
                         str(curr_user),
                         user_strs,
                     )
-                    ranked_users = [next(u for u in users if str(u) == user_str) for user_str in ranked_user_strs]
+                    ranked_users = [
+                        next(u for u in users if str(u) == user_str)
+                        for user_str in ranked_user_strs
+                    ]
                     for user in ranked_users:
                         match = Match(user1=curr_user, user2=user)
                         db_session.add(match)
@@ -556,8 +662,8 @@ def get_app():  # noqa: C901
             if not matches:
                 return fh.Main(
                     fh.P(
-                        "No matches found yet.",
-                        cls=f"text-{text_color} text-center",
+                        "No matches made yet.",
+                        cls=f"{large_text} text-{text_color} text-center",
                     ),
                     cls=page_ctnt,
                 )
@@ -591,7 +697,7 @@ def get_app():  # noqa: C901
                                     fh.Div(
                                         fh.Div(
                                             fh.P(
-                                                f"Major",
+                                                "Major",
                                                 cls=f"font-semibold text-{text_color}",
                                             ),
                                             fh.P(
@@ -599,7 +705,7 @@ def get_app():  # noqa: C901
                                                 cls=f"text-{text_color}",
                                             ),
                                             fh.P(
-                                                f"Minor",
+                                                "Minor",
                                                 cls=f"font-semibold text-{text_color}",
                                             ),
                                             fh.P(
@@ -607,7 +713,7 @@ def get_app():  # noqa: C901
                                                 cls=f"text-{text_color}",
                                             ),
                                             fh.P(
-                                                f"Graduation",
+                                                "Graduation",
                                                 cls=f"font-semibold text-{text_color}",
                                             ),
                                             fh.P(
@@ -644,7 +750,7 @@ def get_app():  # noqa: C901
                                         ),
                                         fh.Img(
                                             src=u.schedule.img or "/logo.png",
-                                            cls=f"w-60 h-auto md:w-96 md:h-auto object-cover",
+                                            cls="w-60 h-auto md:w-96 md:h-auto object-cover",
                                         ),
                                         fh.Div(
                                             fh.P(
@@ -699,6 +805,32 @@ def get_app():  # noqa: C901
                 ),
             )
 
+    def feed_content(session):
+        curr_user = get_curr_user(session)
+        if not curr_user:
+            return fh.Main(
+                fh.P(
+                    "You must be logged in to view the feed.",
+                    cls=f"{large_text} text-{text_color} text-center",
+                ),
+                cls=page_ctnt,
+            )
+        return fh.Main(
+            fh.Div(
+                feed_msgs(),
+                fh.Form(
+                    feed_input(),
+                    hx_trigger="keyup[shiftKey&&key=='Enter'] from:body",
+                    ws_send=True,
+                    cls="w-full relative",
+                ),
+                hx_ext="ws",
+                ws_connect="ws",
+                cls=f"w-full md:w-2/3 {input_cls} p-8 flex flex-col justify-start items-center gap-8",
+            ),
+            cls=page_ctnt,
+        )
+
     def signup_content(req):
         return fh.Main(
             fh.Div(
@@ -729,7 +861,7 @@ def get_app():  # noqa: C901
                                 "Continue with GitHub",
                                 cls="flex grow justify-center items-center",
                             ),
-                            cls="flex justify-between items-center",
+                            cls="flex justify-between items-center gap-4",
                         ),
                         cls=f"w-full {click_neutral_button} p-3 {rounded} {shadow}",
                     ),
@@ -749,7 +881,7 @@ def get_app():  # noqa: C901
                                 "Continue with Google",
                                 cls="flex grow justify-center items-center",
                             ),
-                            cls="flex justify-between items-center",
+                            cls="flex justify-between items-center gap-4",
                         ),
                         cls=f"w-full {click_neutral_button} p-3 {rounded} {shadow}",
                     ),
@@ -835,7 +967,7 @@ def get_app():  # noqa: C901
                                 "Continue with GitHub",
                                 cls="flex grow justify-center items-center",
                             ),
-                            cls="flex justify-between items-center",
+                            cls="flex justify-between items-center gap-4",
                         ),
                         cls=f"w-full {click_neutral_button} p-3 {rounded} {shadow}",
                     ),
@@ -855,7 +987,7 @@ def get_app():  # noqa: C901
                                 "Continue with Google",
                                 cls="flex grow justify-center items-center",
                             ),
-                            cls="flex justify-between items-center",
+                            cls="flex justify-between items-center gap-4",
                         ),
                         cls=f"w-full {click_neutral_button} p-3 {rounded} {shadow}",
                     ),
@@ -1034,93 +1166,100 @@ def get_app():  # noqa: C901
         )
 
     def settings_content(session):
-        curr_user = get_curr_user(session)
         max_text_length_sm = 7
-        max_text_length_md = 17
+        max_text_length_md = 12
+        max_text_length_lg = 17
+
+        curr_user = get_curr_user(session)
+        if not curr_user:
+            return fh.Main(
+                fh.P(
+                    "You must be logged in to view your settings.",
+                    cls=f"{large_text} text-{text_color} text-center",
+                ),
+                cls=page_ctnt,
+            )
         return fh.Main(
             fh.Div(
-                    fh.Div(
-                        fh.Img(
-                            src=curr_user.profile_img,
-                            cls=f"w-20 h-20 md:w-28 md:h-28 object-cover rounded-full {shadow}",
-                        ),
-                        fh.Button(
-                            fh.P(
-                                "Edit",
-                                id="edit-button-text",
-                                cls=f"hide-when-loading text-{text_color} hover:text-{text_button_hover_color}",
-                            ),
-                            spinner(
-                                id="edit-loader",
-                                cls=f"w-6 h-6 text-{text_color} hover:text-{text_button_hover_color}",
-                            ),
-                            hx_get="/user/settings/edit",
-                            hx_target="#settings",
-                            hx_swap="outerHTML",
-                            hx_indicator="#edit-button-text, #edit-loader",
-                            hx_disabled_elt="#edit-button",
-                            cls=f"max-w-28 md:max-w-48 flex grow justify-center items-center {click_button} {rounded} {shadow} p-3",
-                        ),
-                        cls="w-full flex justify-between items-center",
+                fh.Div(
+                    fh.Img(
+                        src=curr_user.profile_img,
+                        cls=f"w-20 h-20 object-cover rounded-full {shadow}",
                     ),
-                    fh.Div(
-                        fh.P("Email:", cls=f"text-{text_color}"),
-                        fh.P(
-                            curr_user.email
-                            if len(curr_user.email) <= max_text_length_md
-                            else curr_user.email[:max_text_length_md] + "...",
-                            cls=f"text-{text_color} hidden md:block",
-                        ),
-                        fh.P(
-                            curr_user.email
-                            if len(curr_user.email) <= max_text_length_sm
-                            else curr_user.email[:max_text_length_sm] + "...",
-                            cls=f"text-{text_color} block md:hidden",
-                        ),
-                        cls="w-full flex justify-between items-center",
-                    ),
-                    fh.Div(
-                        fh.P("Username:", cls=f"text-{text_color}"),
-                        fh.P(
-                            curr_user.username
-                            if len(curr_user.username) <= max_text_length_md
-                            else curr_user.username[:max_text_length_md] + "...",
-                            cls=f"text-{text_color} hidden md:block",
-                        ),
-                        fh.P(
-                            curr_user.username
-                            if len(curr_user.username) <= max_text_length_sm
-                            else curr_user.username[:max_text_length_sm] + "...",
-                            cls=f"text-{text_color} block md:hidden",
-                        ),
-                        cls="w-full flex justify-between items-center",
-                    ),
-                    fh.Div(
-                        fh.P("Password:", cls=f"text-{text_color}"),
-                        fh.P("********", cls=f"text-{text_color}"),
-                        cls="w-full flex justify-between items-center",
-                    )
-                    if curr_user.login_type == "email"
-                    else None,
                     fh.Button(
                         fh.P(
-                            "Delete Account",
-                            id="delete-account-button-text",
+                            "Edit",
+                            id="edit-button-text",
                             cls=f"hide-when-loading text-{text_color} hover:text-{text_button_hover_color}",
                         ),
                         spinner(
-                            id="delete-account-loader",
+                            id="edit-loader",
                             cls=f"w-6 h-6 text-{text_color} hover:text-{text_button_hover_color}",
                         ),
-                        hx_delete="/user/settings/delete-account",
-                        hx_confirm="Are you sure you want to delete your account? This action cannot be undone.",
-                        hx_indicator="#delete-account-button-text, #delete-account-loader",
-                        hx_disabled_elt="#delete-account-button",
-                        cls=f"w-full flex justify-center items-center {click_danger_button} {rounded} {shadow} p-3",
+                        hx_get="/user/settings/edit",
+                        hx_target="#settings",
+                        hx_swap="outerHTML",
+                        hx_indicator="#edit-button-text, #edit-loader",
+                        hx_disabled_elt="#edit-button",
+                        cls=f"max-w-28 md:max-w-40 flex grow justify-center items-center {click_button} {rounded} {shadow} p-3",
                     ),
-                    id="settings",
-                    cls=f"w-full md:w-1/3 {input_cls} p-8 flex flex-col justify-center items-center gap-8",
+                    cls="w-full flex justify-between items-center gap-8",
                 ),
+                fh.Div(
+                    fh.P("Email:", cls=f"text-{text_color}"),
+                    fh.P(
+                        curr_user.email
+                        if len(curr_user.email) <= max_text_length_lg
+                        else curr_user.email[:max_text_length_lg] + "...",
+                        cls=f"text-{text_color} hidden lg:block",
+                    ),
+                    fh.P(
+                        curr_user.email
+                        if len(curr_user.email) <= max_text_length_md
+                        else curr_user.email[:max_text_length_md] + "...",
+                        cls=f"text-{text_color} hidden md:block lg:hidden",
+                    ),
+                    fh.P(
+                        curr_user.email
+                        if len(curr_user.email) <= max_text_length_sm
+                        else curr_user.email[:max_text_length_sm] + "...",
+                        cls=f"text-{text_color} block md:hidden",
+                    ),
+                    cls="w-full flex justify-between items-center gap-8",
+                ),
+                fh.Div(
+                    fh.P("Username:", cls=f"text-{text_color}"),
+                    fh.P(
+                        curr_user.username
+                        if len(curr_user.username) <= max_text_length_lg
+                        else curr_user.username[:max_text_length_lg] + "...",
+                        cls=f"text-{text_color} hidden lg:block",
+                    ),
+                    fh.P(
+                        curr_user.username
+                        if len(curr_user.username) <= max_text_length_md
+                        else curr_user.username[:max_text_length_md] + "...",
+                        cls=f"text-{text_color} hidden md:block lg:hidden",
+                    ),
+                    fh.P(
+                        curr_user.username
+                        if len(curr_user.username) <= max_text_length_sm
+                        else curr_user.username[:max_text_length_sm] + "...",
+                        cls=f"text-{text_color} block md:hidden",
+                    ),
+                    cls="w-full flex justify-between items-center gap-8",
+                ),
+                fh.Div(
+                    fh.P("Password:", cls=f"text-{text_color}"),
+                    fh.P("********", cls=f"text-{text_color}"),
+                    cls="w-full flex justify-between items-center gap-8",
+                )
+                if curr_user.login_type == "email"
+                else None,
+                delete_account_button(),
+                id="settings",
+                cls=f"w-full md:w-1/3 {input_cls} p-8 flex flex-col justify-center items-center gap-8",
+            ),
             cls=page_ctnt,
         )
 
@@ -1156,7 +1295,9 @@ def get_app():  # noqa: C901
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                cwd=PARENT_PATH / "Python-Antivirus" if modal.is_local() else "/root/Python-Antivirus",
+                cwd=PARENT_PATH / "Python-Antivirus"
+                if modal.is_local()
+                else "/root/Python-Antivirus",
             )
             scan_result = result.stdout.strip().lower()
             if scan_result == "infected":
@@ -1271,6 +1412,18 @@ def get_app():  # noqa: C901
             ),
         )
 
+    @f_app.get("/feed")
+    def feed(session):
+        return (
+            fh.Title(f"{APP_NAME} | feed"),
+            fh.Div(
+                toast_container(),
+                nav(session, "feed"),
+                feed_content(session),
+                cls=main_page,
+            ),
+        )
+
     @f_app.get("/signup")
     def signup_page(req, session):
         return (
@@ -1380,7 +1533,7 @@ def get_app():  # noqa: C901
                 schedule_img_container(),
                 toast_container(message=res["error"], type="error", hidden=False),
             )
-        
+
         schedule_img = f"data:image/png;base64,{res['success']}"
         is_valid_schedule, schedule_text = (
             get_schedule_text.local(schedule_img)
@@ -1393,9 +1546,11 @@ def get_app():  # noqa: C901
                     id="schedule-img-preview",
                 ),
                 schedule_img_container(),
-                toast_container(message="Invalid schedule image.", type="error", hidden=False),
+                toast_container(
+                    message="Invalid schedule image.", type="error", hidden=False
+                ),
             )
-        
+
         with get_db_session() as db_session:
             schedule = Schedule(img=schedule_img, text=schedule_text)
             db_session.add(schedule)
@@ -1406,7 +1561,7 @@ def get_app():  # noqa: C901
                 fh.Img(
                     src=schedule_img,
                     id="schedule-img-preview",
-                    cls=f"w-60 h-auto md:w-96 md:h-auto object-cover",
+                    cls="w-60 h-auto md:w-96 md:h-auto object-cover",
                 ),
             )
 
@@ -1419,24 +1574,40 @@ def get_app():  # noqa: C901
     @f_app.post("/find-matches")
     def find_matches(session):
         if not session["graduation_year"]:
-            return toast_container(message="Please select a graduation year.", type="error", hidden=False)
+            return toast_container(
+                message="Please select a graduation year.", type="error", hidden=False
+            )
         if not session["major"]:
-            return toast_container(message="Please select a major.", type="error", hidden=False)
+            return toast_container(
+                message="Please select a major.", type="error", hidden=False
+            )
         if not json.loads(session["interests"]):
-            return toast_container(message="Please select at least one interest.", type="error", hidden=False)
+            return toast_container(
+                message="Please select at least one interest.",
+                type="error",
+                hidden=False,
+            )
         if not json.loads(session["traits"]):
-            return toast_container(message="Please select at least one trait.", type="error", hidden=False)
+            return toast_container(
+                message="Please select at least one trait.", type="error", hidden=False
+            )
         if not session["schedule_id"]:
-            return toast_container(message="Please upload an image of your schedule.", type="error", hidden=False)
+            return toast_container(
+                message="Please upload an image of your schedule.",
+                type="error",
+                hidden=False,
+            )
         if not session["bio"]:
-            return toast_container(message="Please write a bio.", type="error", hidden=False)
+            return toast_container(
+                message="Please write a bio.", type="error", hidden=False
+            )
         if not session["waiting_for_match"]:
             session["waiting_for_match"] = True
 
         curr_user = get_curr_user(session)
         if not curr_user:
             return fh.Redirect("/signup")
-            
+
         with get_db_session() as db_session:
             curr_user = db_session.merge(curr_user)
             curr_user.graduation_year = session["graduation_year"]
@@ -1444,12 +1615,14 @@ def get_app():  # noqa: C901
             curr_user.minor = session["minor"]
             curr_user.interests = json.loads(session["interests"])
             curr_user.personality_traits = json.loads(session["traits"])
-            curr_user.schedule = db_session.exec(select(Schedule).where(Schedule.id == session["schedule_id"])).first()
+            curr_user.schedule = db_session.exec(
+                select(Schedule).where(Schedule.id == session["schedule_id"])
+            ).first()
             curr_user.bio = session["bio"]
             curr_user.waiting_for_match = session["waiting_for_match"]
             db_session.commit()
             db_session.refresh(curr_user)
-            
+
         session["graduation_year"] = None
         session["major"] = None
         session["minor"] = None
@@ -1458,14 +1631,39 @@ def get_app():  # noqa: C901
         session["schedule_id"] = None
         session["bio"] = None
         session["waiting_for_match"] = None
-        
+
         return fh.Redirect("/matches")
 
-    ## overlay
-    @f_app.get("/user/overlay/show")
-    def overlay_show(session):
+    ## feed
+    def on_connect(ws, send):
+        feed_users[id(ws)] = send
+
+    def on_disconnect(ws):
+        feed_users.pop(id(ws), None)
+
+    @f_app.ws("/ws", conn=on_connect, disconn=on_disconnect)
+    async def ws(session, msg: str, send):
+        await send(feed_input())
+        if not msg.strip():
+            return
+
         curr_user = get_curr_user(session)
+        with get_db_session() as db_session:
+            msg = FeedMessage(message=msg, user=curr_user)
+            db_session.add(msg)
+            db_session.commit()
+            db_session.refresh(msg)
+
+        for u in feed_users.values():
+            await u(feed_msgs())
+
+    ## overlay
+    def overlay(session):
         max_username_length = 17
+        curr_user = get_curr_user(session)
+        if not curr_user:
+            return fh.Redirect("/login")
+
         return fh.Div(
             fh.Div(
                 fh.Img(
@@ -1478,14 +1676,18 @@ def get_app():  # noqa: C901
                     else curr_user.username[:max_username_length] + "...",
                     cls=f"{medium_text} text-{text_color} hover:text-{text_hover_color} hidden md:block",
                 ),
-                hx_get="/user/overlay/close",
-                hx_target="#overlay",
-                hx_swap="outerHTML",
-                hx_trigger="click",
-                hx_disabled_elt="#overlay",
                 cls=f"flex justify-center items-center gap-4 cursor-pointer hover:{img_hover} hover:text-{text_hover_color}",
+                onclick="document.getElementById('overlay-menu').classList.toggle('hidden')",
             ),
             fh.Div(
+                fh.A(
+                    fh.Button(
+                        "Feed",
+                        cls=f"w-full {click_neutral_button} p-3 {rounded} {shadow}",
+                    ),
+                    href="/feed",
+                    cls="w-full",
+                ),
                 fh.A(
                     fh.Button(
                         "Matches",
@@ -1517,36 +1719,11 @@ def get_app():  # noqa: C901
                     hx_indicator="#logout-button-text, #logout-loader",
                     hx_disabled_elt="#logout-button",
                 ),
-                cls=f"absolute top-16 right-0 min-w-40 z-10 {input_cls} p-2 flex flex-col justify-center items-center gap-2",
+                id="overlay-menu",
+                cls=f"absolute top-16 right-0 min-w-40 z-10 {input_cls} p-2 flex flex-col justify-center items-center gap-2 hidden",
             ),
             id="overlay",
-            hx_swap_oob="true",
             cls="relative",
-        )
-
-    @f_app.get("/user/overlay/close")
-    def overlay_close(session):
-        curr_user = get_curr_user(session)
-        max_username_length = 17
-        return fh.Div(
-            fh.Img(
-                src=curr_user.profile_img,
-                cls=f"w-12 h-12 object-cover hover:{img_hover} rounded-full {shadow}",
-            ),
-            fh.P(
-                curr_user.username
-                if len(curr_user.username) <= max_username_length
-                else curr_user.username[:max_username_length] + "...",
-                cls=f"{medium_text} text-{text_color} hover:text-{text_hover_color} hidden md:block",
-            ),
-            id="overlay",
-            hx_get="/user/overlay/show",
-            hx_target="#overlay",
-            hx_swap="outerHTML",
-            hx_trigger="click",
-            hx_disabled_elt="#overlay",
-            hx_swap_oob="true",
-            cls=f"flex justify-center items-center gap-4 cursor-pointer hover:{img_hover} hover:text-{text_hover_color}",
         )
 
     ## auth
@@ -1565,9 +1742,15 @@ def get_app():  # noqa: C901
                 return fh.Redirect("/signup")
             else:
                 if not db_user.hashed_password:
-                    return toast_container(message="This account uses a different login method.", type="error", hidden=False)
+                    return toast_container(
+                        message="This account uses a different login method.",
+                        type="error",
+                        hidden=False,
+                    )
                 if not pbkdf2_sha256.verify(password, db_user.hashed_password):
-                    return toast_container(message="Incorrect credentials", type="error", hidden=False)
+                    return toast_container(
+                        message="Incorrect credentials", type="error", hidden=False
+                    )
                 else:
                     session["user_uuid"] = db_user.uuid
                     curr_user = get_curr_user(session)
@@ -1579,7 +1762,11 @@ def get_app():  # noqa: C901
                             curr_user.minor = session["minor"]
                             curr_user.interests = json.loads(session["interests"])
                             curr_user.personality_traits = json.loads(session["traits"])
-                            curr_user.schedule = db_session.exec(select(Schedule).where(Schedule.id == session["schedule_id"])).first()
+                            curr_user.schedule = db_session.exec(
+                                select(Schedule).where(
+                                    Schedule.id == session["schedule_id"]
+                                )
+                            ).first()
                             curr_user.bio = session["bio"]
                             curr_user.waiting_for_match = session["waiting_for_match"]
                             db_session.commit()
@@ -1627,7 +1814,11 @@ def get_app():  # noqa: C901
                         curr_user.minor = session["minor"]
                         curr_user.interests = json.loads(session["interests"])
                         curr_user.personality_traits = json.loads(session["traits"])
-                        curr_user.schedule = db_session.exec(select(Schedule).where(Schedule.id == session["schedule_id"])).first()
+                        curr_user.schedule = db_session.exec(
+                            select(Schedule).where(
+                                Schedule.id == session["schedule_id"]
+                            )
+                        ).first()
                         curr_user.bio = session["bio"]
                         curr_user.waiting_for_match = session["waiting_for_match"]
                         db_session.commit()
@@ -1652,7 +1843,11 @@ def get_app():  # noqa: C901
             if not db_user:
                 return fh.Redirect("/login")
             if db_user.login_type != "email":
-                return toast_container(message="This account uses a different login method.", type="error", hidden=False)
+                return toast_container(
+                    message="This account uses a different login method.",
+                    type="error",
+                    hidden=False,
+                )
 
             reset_token = str(uuid.uuid4())
             with get_db_session() as db_session:
@@ -1671,7 +1866,9 @@ def get_app():  # noqa: C901
     @f_app.post("/auth/reset-password")
     def reset_password(session, password: str, confirm_password: str, token: str):
         if password != confirm_password:
-            return toast_container(message="Passwords do not match", type="error", hidden=False)
+            return toast_container(
+                message="Passwords do not match", type="error", hidden=False
+            )
         if not token:
             return fh.Redirect("/login")
 
@@ -1729,7 +1926,9 @@ def get_app():  # noqa: C901
                     curr_user.minor = session["minor"]
                     curr_user.interests = json.loads(session["interests"])
                     curr_user.personality_traits = json.loads(session["traits"])
-                    curr_user.schedule = db_session.exec(select(Schedule).where(Schedule.id == session["schedule_id"])).first()
+                    curr_user.schedule = db_session.exec(
+                        select(Schedule).where(Schedule.id == session["schedule_id"])
+                    ).first()
                     curr_user.bio = session["bio"]
                     curr_user.waiting_for_match = session["waiting_for_match"]
                     db_session.commit()
@@ -1782,7 +1981,9 @@ def get_app():  # noqa: C901
                     curr_user.minor = session["minor"]
                     curr_user.interests = json.loads(session["interests"])
                     curr_user.personality_traits = json.loads(session["traits"])
-                    curr_user.schedule = db_session.exec(select(Schedule).where(Schedule.id == session["schedule_id"])).first()
+                    curr_user.schedule = db_session.exec(
+                        select(Schedule).where(Schedule.id == session["schedule_id"])
+                    ).first()
                     curr_user.bio = session["bio"]
                     curr_user.waiting_for_match = session["waiting_for_match"]
                     db_session.commit()
@@ -1815,15 +2016,11 @@ def get_app():  # noqa: C901
                             hx_swap="outerHTML",
                             hx_trigger="change",
                             hx_indicator="#profile-img-preview, #profile-img-loader",
-                            hx_disabled_elt="#new-profile-img-upload",
+                            hx_disabled_elt="#new-profile-img-upload, #save-button, #delete-account-button",
                             hx_encoding="multipart/form-data",
                             cls="hidden",
                         ),
-                        fh.Img(
-                            src=curr_user.profile_img,
-                            cls=f"hide-when-loading w-20 h-20 md:w-28 md:h-28 object-cover rounded-full {shadow} cursor-pointer hover:{img_hover}",
-                            id="profile-img-preview",
-                        ),
+                        settings_profile_img(curr_user.profile_img),
                         spinner(
                             id="profile-img-loader",
                             cls=f"w-12 h-12 text-{text_color} hover:text-{text_hover_color}",
@@ -1848,9 +2045,9 @@ def get_app():  # noqa: C901
                         hx_disabled_elt="#new-profile-img-upload, #email, #username, #password, #save-button",
                         hx_include="#new-profile-img-upload",
                         hx_encoding="multipart/form-data",
-                        cls=f"max-w-28 md:max-w-48 flex grow justify-center items-center {click_button} {rounded} p-3",
+                        cls=f"max-w-28 md:max-w-40 flex grow justify-center items-center {click_button} {rounded} p-3",
                     ),
-                    cls="w-full flex justify-between items-center",
+                    cls="w-full flex justify-between items-center gap-8",
                 ),
                 fh.Div(
                     fh.P("Email:", cls=f"text-{text_color}"),
@@ -1859,9 +2056,9 @@ def get_app():  # noqa: C901
                         value=curr_user.email,
                         name="email",
                         type="email",
-                        cls=f"max-w-28 md:max-w-48 flex grow justify-center items-center {input_cls}",
+                        cls=f"max-w-28 md:max-w-40 flex grow justify-center items-center {input_cls}",
                     ),
-                    cls="w-full flex justify-between items-center",
+                    cls="w-full flex justify-between items-center gap-8",
                 ),
                 fh.Div(
                     fh.P("Username:", cls=f"text-{text_color}"),
@@ -1869,9 +2066,9 @@ def get_app():  # noqa: C901
                         id="username",
                         value=curr_user.username,
                         name="username",
-                        cls=f"max-w-28 md:max-w-48 flex grow justify-center items-center {input_cls}",
+                        cls=f"max-w-28 md:max-w-40 flex grow justify-center items-center {input_cls}",
                     ),
-                    cls="w-full flex justify-between items-center",
+                    cls="w-full flex justify-between items-center gap-8",
                 ),
                 fh.Div(
                     fh.P("Password:", cls=f"text-{text_color}"),
@@ -1880,28 +2077,13 @@ def get_app():  # noqa: C901
                         value="",
                         name="password",
                         type="password",
-                        cls=f"max-w-28 md:max-w-48 flex grow justify-center items-center {input_cls}",
+                        cls=f"max-w-28 md:max-w-40 flex grow justify-center items-center {input_cls}",
                     ),
-                    cls="w-full flex justify-between items-center",
+                    cls="w-full flex justify-between items-center gap-8",
                 )
                 if curr_user.login_type == "email"
                 else None,
-                fh.Button(
-                    fh.P(
-                        "Delete Account",
-                        id="delete-account-button-text",
-                        cls=f"hide-when-loading text-{text_color} hover:text-{text_button_hover_color}",
-                    ),
-                    spinner(
-                        id="delete-account-loader",
-                        cls=f"w-6 h-6 text-{text_color} hover:text-{text_button_hover_color}",
-                    ),
-                    hx_delete="/user/settings/delete-account",
-                    hx_confirm="Are you sure you want to delete your account? This action cannot be undone.",
-                    hx_indicator="#delete-account-button-text, #delete-account-loader",
-                    hx_disabled_elt="#delete-account-button",
-                    cls=f"w-full flex justify-center items-center {click_danger_button} {rounded} p-3",
-                ),
+                delete_account_button(),
                 id="settings",
                 cls=f"w-full md:w-1/3 {input_cls} p-8 flex flex-col justify-center items-center gap-8",
             ),
@@ -1916,20 +2098,12 @@ def get_app():  # noqa: C901
         res = validate_image_file(profile_img_file)
         if "error" in res.keys():
             return (
-                fh.Img(
-                    src=curr_user.profile_img,
-                    cls=f"w-12 h-12 object-cover rounded-full {shadow} cursor-pointer hover:{img_hover}",
-                    id="profile-img-preview",
+                (
+                    settings_profile_img(curr_user.profile_img),
+                    toast_container(message=res["error"], type="error", hidden=False),
                 ),
-                toast_container(message=res["error"], type="error", hidden=False),
-            ),
-        return (
-            fh.Img(
-                src=f"data:image/png;base64,{res['success']}",
-                cls=f"w-12 h-12 object-cover rounded-full {shadow} cursor-pointer hover:{img_hover}",
-                id="profile-img-preview",
-            ),
-        )
+            )
+        return settings_profile_img(f"data:image/png;base64,{res['success']}")
 
     @f_app.patch("/user/settings/save")
     def save_settings(
@@ -1945,23 +2119,29 @@ def get_app():  # noqa: C901
                 query = select(User).where(User.email == email)
                 db_user = db_session.exec(query).first()
                 if db_user:
-                    return toast_container(message="Email already exists", type="error", hidden=False)
+                    return toast_container(
+                        message="Email already exists", type="error", hidden=False
+                    )
             curr_user.email = email
-            
+
             if username and username != curr_user.username:
                 query = select(User).where(User.username == username)
                 db_user = db_session.exec(query).first()
                 if db_user:
-                    return toast_container(message="Username already exists", type="error", hidden=False)
+                    return toast_container(
+                        message="Username already exists", type="error", hidden=False
+                    )
             curr_user.username = username
-            
+
             if curr_user.login_type == "email" and password:
                 curr_user.hashed_password = pbkdf2_sha256.hash(password)
 
             if profile_img_file is not None and not profile_img_file.filename == "":
                 res = validate_image_file(profile_img_file)
                 if "error" in res.keys():
-                    return toast_container(message=res["error"], type="error", hidden=False)
+                    return toast_container(
+                        message=res["error"], type="error", hidden=False
+                    )
                 curr_user.profile_img = f"data:image/png;base64,{res['success']}"
 
             db_session.add(curr_user)
@@ -1999,8 +2179,10 @@ f_app = get_app()
     image=FE_IMAGE,
     secrets=SECRETS,
     timeout=5 * MINUTES,
+    max_containers=1,  # since we're using a session cookie, we need to limit the number of containers
     scaledown_window=15 * MINUTES,
 )
+@modal.concurrent(max_inputs=1000)
 @modal.asgi_app()
 def modal_get():
     return f_app

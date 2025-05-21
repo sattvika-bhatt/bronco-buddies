@@ -3,9 +3,6 @@ from pathlib import Path, PurePosixPath
 
 import modal
 
-from db.models import (
-    User,
-)
 from utils import (
     APP_NAME,
     MINUTES,
@@ -92,10 +89,10 @@ app = modal.App(f"{APP_NAME}-helpers")
 with GPU_IMAGE.imports():
     import torch
     from huggingface_hub import snapshot_download
+    from pydantic import BaseModel
     from rerankers import Reranker
     from vllm import LLM, SamplingParams
     from vllm.sampling_params import GuidedDecodingParams
-    from pydantic import BaseModel
 
     if modal.is_local():
         download_models()
@@ -158,23 +155,21 @@ def get_schedule_text(schedule_img: str) -> tuple[bool, str]:
                 "content": [
                     {
                         "type": "text",
-                        "text": f"""
+                        "text": """
                         Given the image, determine whether it contains a valid weekly schedule.
-                        If not, respond with {{
+                        If not, respond with {
                             "is_valid_schedule": False,
                             "schedule_text": ""
-                        }}
-                        If it does, respond with {{
+                        }
+                        If it does, respond with {
                             "is_valid_schedule": True,
                             "schedule_text": <schedule text with format described above>
-                        }}
+                        }
                         """,
                     },
                     {
                         "type": "image_url",
-                        "image_url": {
-                            "url": schedule_img
-                        },
+                        "image_url": {"url": schedule_img},
                     },
                 ],
             },
