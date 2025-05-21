@@ -47,24 +47,32 @@ SMTP_PASSWORD=
 ├── uv.lock                 # project deps lock.
 ```
 
-### Test
+### Unit tests
 
-Test helpers locally:
-
-```bash
-uv run src/helpers.py
-```
-
-Test helpers on Modal:
-
-```bash
-modal run src/helpers.py
-```
-
-Run unit tests:
+Run with:
 
 ```bash
 uv run pytest -q
+```
+
+### Generating users
+
+Migrate db (do before running the script, env=local/dev/main):
+
+```bash
+make migrate MSG="your migration message" ENV=main
+```
+
+Run the script:
+
+```bash
+uv run src/gen_users.py --num_users 10
+```
+
+Or on Modal (make sure you have run `source .venv/bin/activate`):
+
+```bash
+modal run src/gen_users.py --num_users 10
 ```
 
 ### App
@@ -75,7 +83,7 @@ Migrate db (do before running the app, env=local/dev/main):
 make migrate MSG="your migration message" ENV=main
 ```
 
-Then, serve the app locally:
+Then, serve the app locally (make sure you have run `source .venv/bin/activate`):
 
 ```bash
 uv run src/app.py

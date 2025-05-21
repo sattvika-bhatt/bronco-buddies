@@ -48,11 +48,12 @@ else:
 
 
 def download_models():
-    snapshot_download(
-        repo_id=reranker_name,
-        local_dir=PRETRAINED_VOL_PATH,
-        ignore_patterns=["*.pt", "*.bin"],  # using safetensors
-    )
+    for repo_id in [vlm_name, reranker_name]:
+        snapshot_download(
+            repo_id=repo_id,
+            local_dir=PRETRAINED_VOL_PATH,
+            ignore_patterns=["*.pt", "*.bin"],  # using safetensors
+        )
 
 
 GPU_IMAGE = (
@@ -61,6 +62,7 @@ GPU_IMAGE = (
     .pip_install(
         "flashinfer-python>=0.2.5",
         "huggingface-hub[hf-transfer]>=0.30.2",
+        "python-dotenv>=1.1.0",
         "rerankers>=0.9.1.post1",
         "sentence-transformers>=4.1.0",
         "sqlmodel>=0.0.24",
@@ -81,7 +83,6 @@ GPU_IMAGE = (
         secrets=SECRETS,
         volumes=VOLUME_CONFIG,
     )
-    .add_local_python_source("_remote_module_non_scriptable", "db", "utils")
 )
 
 app = modal.App(f"{APP_NAME}-helpers")
@@ -144,9 +145,10 @@ def get_schedule_text(schedule_img: str) -> tuple[bool, str]:
     )
 
     system_prompt = """
-        You are an expert at discerning whether images contain valid schedules.
-        When given a valid schedule, you are extremely capable of describing
-        the schedule in a paragraph or two.
+        You are an expert at discerning whether images contain valid weekly schedules (e.g., Google Calendar, Workday, etc.).
+        When given a valid weekly schedule, you are extremely capable of describing
+        the schedule broken down by time periods (morning, early afternoon, late afternoon, evening) and 
+        including specific days and times for classes, study sessions, and free time.
     """
     conversation = [
         [
@@ -157,14 +159,14 @@ def get_schedule_text(schedule_img: str) -> tuple[bool, str]:
                     {
                         "type": "text",
                         "text": f"""
-                        Given the image, determine whether it contains a valid schedule.
+                        Given the image, determine whether it contains a valid weekly schedule.
                         If not, respond with {{
                             "is_valid_schedule": False,
                             "schedule_text": ""
                         }}
                         If it does, respond with {{
                             "is_valid_schedule": True,
-                            "schedule_text": <description of the schedule>
+                            "schedule_text": <schedule text with format described above>
                         }}
                         """,
                     },
@@ -193,7 +195,7 @@ def get_schedule_text(schedule_img: str) -> tuple[bool, str]:
     secrets=SECRETS,
     timeout=2 * MINUTES,
 )
-def rank_users(target_user: User, users: list[User]) -> list[User]:
+def rank_users(target_user_str: str, users_strs: list[str]) -> list[str]:
     ranker = Reranker(
         reranker_name,
         model_type="colbert",
@@ -207,6 +209,6 @@ def rank_users(target_user: User, users: list[User]) -> list[User]:
         batch_size=batch_size,
         model_kwargs={"cache_dir": PRETRAINED_VOL_PATH},
     )
-    results = ranker.rank(query=str(target_user), docs=[str(user) for user in users])
-    top_k_idxs = [doc.doc_id for doc in results.top_k(len(users))]
-    return [users[top_k_idx] for top_k_idx in top_k_idxs]
+    results = ranker.rank(query=target_user_str, docs=users_strs)
+    top_k_idxs = [doc.doc_id for doc in results.top_k(len(users_strs))]
+    return [users_strs[top_k_idx] for top_k_idx in top_k_idxs]
