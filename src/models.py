@@ -1,6 +1,5 @@
 import uuid
 from datetime import datetime, timezone
-from typing import List
 
 from sqlalchemy import JSON, Column
 from sqlmodel import Field, Relationship, SQLModel
@@ -41,19 +40,19 @@ class User(SQLModel, table=True):
         back_populates="user",
         sa_relationship_kwargs={"single_parent": True},
     )
-    feed_messages: List["FeedMessage"] = Relationship(
+    feed_messages: list["FeedMessage"] = Relationship(
         back_populates="user",
         cascade_delete=True,
     )
     waiting_for_match: bool | None = Field(default=False)
 
     # two directional collections that use the link table
-    outgoing_matches: List["Match"] = Relationship(
+    outgoing_matches: list["Match"] = Relationship(
         back_populates="user1",
         sa_relationship_kwargs={"foreign_keys": "[Match.user_id_1]"},
         cascade_delete=True,
     )
-    incoming_matches: List["Match"] = Relationship(
+    incoming_matches: list["Match"] = Relationship(
         back_populates="user2",
         sa_relationship_kwargs={"foreign_keys": "[Match.user_id_2]"},
         cascade_delete=True,
@@ -73,13 +72,15 @@ class User(SQLModel, table=True):
         interests = self.interests or []
         traits = self.personality_traits or []
         return f"""
-        Major: {self.major}
-        Minor: {self.minor}
-        Graduation Year: {self.graduation_year}
-        Interests: {', '.join(interests)}
-        Personality Traits: {', '.join(traits)}
-        Schedule: {self.schedule.text}
-        Bio: {self.bio}
+        Created account via: {self.login_type.capitalize() or 'Not specified'}
+        Created at: {self.created_at.strftime('%B %d, %Y')}
+        Major: {self.major or 'Not specified'}
+        Minor: {self.minor or 'Not specified'}
+        Graduation Year: {self.graduation_year or 'Not specified'}
+        Interests: {', '.join(interests) or 'Not specified'}
+        Personality Traits: {', '.join(traits) or 'Not specified'}
+        Bio: {self.bio or 'Not specified'}
+        Schedule: {self.schedule.text or 'Not specified'}
         """
 
 
@@ -98,6 +99,6 @@ class FeedMessage(SQLModel, table=True):
     created_at: datetime | None = Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
-    
+
     user_id: int | None = Field(default=None, foreign_key="user.id")
     user: User | None = Relationship(back_populates="feed_messages")

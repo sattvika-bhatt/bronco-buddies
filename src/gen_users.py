@@ -1,16 +1,16 @@
-import os
 import argparse
+import os
 import random
 from contextlib import contextmanager
 
 import modal
 
-from src.helpers import GPU_IMAGE, VOLUME_CONFIG, PRETRAINED_VOL_PATH
-from db.models import (
-    User,
+from src.helpers import GPU_IMAGE, PRETRAINED_VOL_PATH, VOLUME_CONFIG
+from src.models import (
     Schedule,
+    User,
 )
-from utils import (
+from src.utils import (
     APP_NAME,
     GRADUATION_YEARS,
     INTERESTS,
@@ -22,7 +22,6 @@ from utils import (
     PYTHON_VERSION,
     SECRETS,
 )
-
 
 llm_name = "Qwen/Qwen3-0.6B"
 llm_enforce_eager = True
@@ -54,9 +53,9 @@ app = modal.App(f"{APP_NAME}-user-gen")
 
 with GPU_IMAGE.imports():
     import torch
+    from pydantic import BaseModel
     from vllm import LLM, SamplingParams
     from vllm.sampling_params import GuidedDecodingParams
-    from pydantic import BaseModel
 
 
 with DB_IMAGE.imports():
@@ -117,7 +116,6 @@ def gen_fake_users(user_idxs: list[int]) -> list[dict]:
         schedule: _ScheduleGen
         bio: str  # short bio
 
-
     sampling_params = SamplingParams(
         temperature=temperature,
         top_p=top_p,
@@ -157,8 +155,13 @@ def gen_fake_users(user_idxs: list[int]) -> list[dict]:
         for _ in range(len(user_idxs))
     ]
     outputs = llm.chat(conversation, sampling_params, use_tqdm=True)
-    user_texts = [outputs[i].outputs[0].text.split("</think>")[-1].strip() for i in range(len(user_idxs))]
-    return [GenUser.model_validate_json(user_text).model_dump() for user_text in user_texts]
+    user_texts = [
+        outputs[i].outputs[0].text.split("</think>")[-1].strip()
+        for i in range(len(user_idxs))
+    ]
+    return [
+        GenUser.model_validate_json(user_text).model_dump() for user_text in user_texts
+    ]
 
 
 @app.function(
@@ -174,15 +177,17 @@ def insert_users(gen_users_data: list[dict]):
         users_to_persist = []
         for user_data_dict in gen_users_data:
             schedule_attributes = user_data_dict.pop("schedule")
-            db_schedule= Schedule(**schedule_attributes)
+            db_schedule = Schedule(**schedule_attributes)
             db_user = User(**user_data_dict, schedule=db_schedule)
             users_to_persist.append(db_user)
         session.add_all(users_to_persist)
         session.commit()
 
+
 # -----------------------------------------------------------------------------
 
 default_num_users = llm_max_num_seqs
+
 
 @app.function(
     image=DB_IMAGE,

@@ -3,7 +3,7 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
-from db.models import User, UserBase, UserCreate
+from src.models import User, UserBase, UserCreate
 
 
 class TestUserBase:

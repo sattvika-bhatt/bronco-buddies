@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 
-from db import models  # noqa: F401
+from src.db import models  # noqa: F401
 
 env = context.get_x_argument(as_dictionary=True).get("env")
 env_file = ".env" if env == "main" else ".env.dev" if env == "dev" else ".env.local"
