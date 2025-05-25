@@ -3,7 +3,7 @@ from pathlib import Path, PurePosixPath
 
 import modal
 
-from utils import (
+from src.utils import (
     APP_NAME,
     MINUTES,
     PYTHON_VERSION,

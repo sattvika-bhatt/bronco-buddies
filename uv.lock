@@ -262,15 +262,18 @@ gpu = [
     { name = "flash-attn" },
     { name = "flashinfer-python" },
     { name = "huggingface-hub", extra = ["hf-transfer"] },
+    { name = "ninja" },
+    { name = "packaging" },
     { name = "rerankers" },
     { name = "sentence-transformers" },
     { name = "vllm" },
+    { name = "wheel" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.15.2" },
-    { name = "modal", specifier = ">=0.74.3" },
+    { name = "modal", specifier = ">=1.0.1" },
     { name = "passlib", specifier = ">=1.7.4" },
     { name = "pillow", specifier = ">=11.2.1" },
     { name = "psycopg2-binary", specifier = ">=2.9.10" },
@@ -288,9 +291,12 @@ gpu = [
     { name = "flash-attn", specifier = ">=2.7.4.post1" },
     { name = "flashinfer-python", specifier = ">=0.2.5" },
     { name = "huggingface-hub", extras = ["hf-transfer"], specifier = ">=0.30.2" },
+    { name = "ninja", specifier = ">=1.11.1.4" },
+    { name = "packaging", specifier = ">=24.2" },
     { name = "rerankers", specifier = ">=0.9.1.post1" },
     { name = "sentence-transformers", specifier = ">=4.1.0" },
     { name = "vllm", specifier = ">=0.8.5" },
+    { name = "wheel", specifier = ">=0.45.1" },
 ]
 
 [[package]]
@@ -1253,13 +1259,12 @@ opencv = [
 
 [[package]]
 name = "modal"
-version = "0.74.36"
+version = "1.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "certifi" },
     { name = "click" },
-    { name = "fastapi" },
     { name = "grpclib" },
     { name = "protobuf" },
     { name = "rich" },
@@ -1271,9 +1276,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "watchfiles" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ea/80/c6a74344d8cb522c5b5e51b3ebb3ce1bbea943cbac3a309fcaa90dede793/modal-0.74.36.tar.gz", hash = "sha256:c5f39c72fca8df1d0fd17baf0e4f32b21b14415531e6ccf73315dd02d8f6eea9", size = 500348 }
+sdist = { url = "https://files.pythonhosted.org/packages/c1/29/b6a5254f5043dbf32a4483063148657bc03fb25ed8214f38d24f8637a58f/modal-1.0.1.tar.gz", hash = "sha256:f2f76d8342562c53add77e0d47af0b78b84f9020e03d9f8c214887e02823251b", size = 505141 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cb/00/294ccbd8dea24e11b6a360ce2c1c47eb3a4d384fbe47a5f00c2168b91e45/modal-0.74.36-py3-none-any.whl", hash = "sha256:ca5fd4031bc4bbb929f5b8d39a4be8d0053323667eae06a4388db2e6ef5b5445", size = 567280 },
+    { url = "https://files.pythonhosted.org/packages/fa/21/100632fc356ee80806577a4920147d773fa0d07de62c3bc0d0620a185f8c/modal-1.0.1-py3-none-any.whl", hash = "sha256:651b21d720096db055882748e28a511cb9123f7597823bba12ab983d70a97656", size = 573170 },
 ]
 
 [[package]]
@@ -2717,15 +2722,15 @@ wheels = [
 
 [[package]]
 name = "synchronicity"
-version = "0.9.11"
+version = "0.9.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "sigtools" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b5/52/f34a9ab6d514e0808d0f572affb360411d596b3439107318c00889277dd6/synchronicity-0.9.11.tar.gz", hash = "sha256:cb5dbbcb43d637e516ae50db05a776da51a705d1e1a9c0e301f6049afc3c2cae", size = 50323 }
+sdist = { url = "https://files.pythonhosted.org/packages/ed/21/82c2b51f901452642cb2ed69ab872ef5eacbf98dbd0b661d3673a76d79f5/synchronicity-0.9.12.tar.gz", hash = "sha256:977f3ed8f6e35de4d1a3f0aeee4937143ba8d913f531d33e8df7c539b2792fb8", size = 50441 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f2/d5/7675cd9b8e18f05b9ea261acad5d197fcb8027d2a65b1a750427ec084593/synchronicity-0.9.11-py3-none-any.whl", hash = "sha256:231129654d2f56b1aa148e85ebd8545231be135771f6d2196d414175b1594ef6", size = 36827 },
+    { url = "https://files.pythonhosted.org/packages/ab/e3/730a67bee380f5638731cd563e8f5ad3a2d480ee788b767698e83eb2290f/synchronicity-0.9.12-py3-none-any.whl", hash = "sha256:b006f57bd216d55e578316096a11b6dc16016d6b48e2766bcffabe40c88f9793", size = 36820 },
 ]
 
 [[package]]
@@ -3153,6 +3158,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/86/eb/20b6cdf273913d0ad05a6a14aed4b9a85591c18a987a3d47f20fa13dcc47/websockets-15.0.1-cp313-cp313-win32.whl", hash = "sha256:ba9e56e8ceeeedb2e080147ba85ffcd5cd0711b89576b83784d8605a7df455fa", size = 176393 },
     { url = "https://files.pythonhosted.org/packages/1b/6c/c65773d6cab416a64d191d6ee8a8b1c68a09970ea6909d16965d26bfed1e/websockets-15.0.1-cp313-cp313-win_amd64.whl", hash = "sha256:e09473f095a819042ecb2ab9465aee615bd9c2028e4ef7d933600a8401c79561", size = 176837 },
     { url = "https://files.pythonhosted.org/packages/fa/a8/5b41e0da817d64113292ab1f8247140aac61cbf6cfd085d6a0fa77f4984f/websockets-15.0.1-py3-none-any.whl", hash = "sha256:f7a866fbc1e97b5c617ee4116daaa09b722101d4a3c170c787450ba409f9736f", size = 169743 },
+]
+
+[[package]]
+name = "wheel"
+version = "0.45.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8a/98/2d9906746cdc6a6ef809ae6338005b3f21bb568bea3165cfc6a243fdc25c/wheel-0.45.1.tar.gz", hash = "sha256:661e1abd9198507b1409a20c02106d9670b2576e916d58f520316666abca6729", size = 107545 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0b/2c/87f3254fd8ffd29e4c02732eee68a83a1d3c346ae39bc6822dcbcb697f2b/wheel-0.45.1-py3-none-any.whl", hash = "sha256:708e7481cc80179af0e556bbf0cc00b8444c7321e2700b8d8580231d13017248", size = 72494 },
 ]
 
 [[package]]

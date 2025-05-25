@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.15.2",
-    "modal>=0.74.3",
+    "modal>=1.0.1",
     "passlib>=1.7.4",
     "pillow>=11.2.1",
     "psycopg2-binary>=2.9.10",
@@ -24,7 +24,10 @@ gpu = [
     "flash-attn>=2.7.4.post1",
     "flashinfer-python>=0.2.5",
     "huggingface-hub[hf-transfer]>=0.30.2",
+    "ninja>=1.11.1.4",
+    "packaging>=24.2",
     "rerankers>=0.9.1.post1",
     "sentence-transformers>=4.1.0",
     "vllm>=0.8.5",
+    "wheel>=0.45.1",
 ]

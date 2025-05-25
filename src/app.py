@@ -23,7 +23,7 @@ from db.models import (
 )
 from src.helpers import app as helpers_app
 from src.helpers import get_schedule_text, rank_users
-from utils import (
+from src.utils import (
     APP_NAME,
     GRADUATION_YEARS,
     INTERESTS,
@@ -168,11 +168,12 @@ def get_app():  # noqa: C901
         return (
             fh.Title(APP_NAME + " | 404"),
             fh.Div(
+                toast_container(),
                 nav(session, "404"),
                 fh.Main(
                     fh.P(
                         "Page not found!",
-                        cls=f"text-2xl text-{error_color} hover:text-{error_hover_color}",
+                        cls=f"{large_text} text-{error_color} hover:text-{error_hover_color}",
                     ),
                     cls=page_ctnt,
                 ),
@@ -193,7 +194,6 @@ def get_app():  # noqa: C901
         exception_handlers={404: _not_found},
         hdrs=[
             fh.Script(src="https://cdn.tailwindcss.com"),
-            fh.HighlightJS(langs=["python", "javascript", "html", "css"]),
             fh.Link(rel="icon", href="/favicon.ico", type="image/x-icon"),
             fh.Script(src="https://unpkg.com/htmx-ext-sse@2.2.1/sse.js"),
             fh.Style("""
@@ -215,7 +215,6 @@ def get_app():  # noqa: C901
         ],
         boost=True,
     )
-
     f_app.add_middleware(
         CORSMiddleware,
         allow_origins=["/"],
@@ -265,7 +264,19 @@ def get_app():  # noqa: C901
             ),
         )
 
-    def schedule_img_container():
+    def google(id="", cls="", **kwargs):
+        return (
+            fh.Svg(
+                fh.NotStr(
+                    """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12.0003 4.75C13.7703 4.75 15.3553 5.36002 16.6053 6.54998L20.0303 3.125C17.9502 1.19 15.2353 0 12.0003 0C7.31028 0 3.25527 2.69 1.28027 6.60998L5.27028 9.70498C6.21525 6.86002 8.87028 4.75 12.0003 4.75Z" fill="#EA4335"/><path d="M23.49 12.275C23.49 11.49 23.415 10.73 23.3 10H12V14.51H18.47C18.18 15.99 17.34 17.25 16.08 18.1L19.945 21.1C22.2 19.01 23.49 15.92 23.49 12.275Z" fill="#4285F4"/><path d="M5.26498 14.2949C5.02498 13.5699 4.88501 12.7999 4.88501 11.9999C4.88501 11.1999 5.01998 10.4299 5.26498 9.7049L1.275 6.60986C0.46 8.22986 0 10.0599 0 11.9999C0 13.9399 0.46 15.7699 1.28 17.3899L5.26498 14.2949Z" fill="#FBBC05"/><path d="M12.0004 24.0001C15.2404 24.0001 17.9654 22.935 19.9454 21.095L16.0804 18.095C15.0054 18.82 13.6204 19.245 12.0004 19.245C8.8704 19.245 6.21537 17.135 5.2654 14.29L1.27539 17.385C3.25539 21.31 7.3104 24.0001 12.0004 24.0001Z" fill="#34A853"/></svg>""",
+                ),
+                id=id,
+                cls=cls,
+                **kwargs,
+            ),
+        )
+
+    def schedule_img_upload_main():
         return (
             fh.Label(
                 fh.Card(
@@ -281,25 +292,39 @@ def get_app():  # noqa: C901
                         hx_encoding="multipart/form-data",
                         required=True,
                         hx_post="/set-schedule",
-                        hx_target="#schedule-img-preview",
+                        hx_target="#schedule-img-display",
                         hx_swap="outerHTML",
                         hx_trigger="change",
-                        hx_indicator="#schedule-img-preview, #schedule-img-loader",
+                        hx_indicator="#schedule-img-display, #schedule-img-loader",
                         hx_disabled_elt="#schedule-img-upload, #find-matches-button",
                     ),
                     cls=f"{input_cls} p-8 flex flex-col justify-center items-start gap-8",
                 ),
                 fh.Div(
-                    id="schedule-img-preview",
+                    id="schedule-img-display",
                 ),
                 spinner(
                     id="schedule-img-loader",
-                    cls=f"absolute bottom-8 right-4 w-6 h-6 text-{text_color} hover:text-{text_hover_color}",
+                    cls=f"absolute bottom-8 right-4 size-6 text-{text_color} hover:text-{text_hover_color}",
                 ),
                 id="schedule-img-container",
                 hx_swap_oob="true",
                 cls="w-full relative",
             ),
+        )
+
+    def profile_img(src: str = "", cls: str = ""):
+        return fh.Img(
+            src=src or "/logo.png",
+            id="profile-img-display",
+            cls=f"object-cover rounded-full {shadow} {cls}",
+        )
+
+    def schedule_img(src: str = "", cls: str = ""):
+        return fh.Img(
+            src=src or "/logo.png",
+            id="schedule-img-display",
+            cls=f"object-cover {rounded} {shadow} w-60 h-auto md:w-96 md:h-auto {cls}",
         )
 
     def toast_container(message: str = "", type: str = "", hidden: bool = True):
@@ -326,11 +351,9 @@ def get_app():  # noqa: C901
 
     def feed_msgs():
         with get_db_session() as db_session:
-            messages = (
-                db_session.query(FeedMessage)
-                .order_by(FeedMessage.created_at.asc())
-                .all()
-            )
+            messages = db_session.exec(
+                select(FeedMessage).order_by(FeedMessage.created_at.asc())
+            ).all()
             return fh.Div(
                 *[
                     fh.Div(
@@ -380,13 +403,6 @@ def get_app():  # noqa: C901
             cls=f"{input_cls} p-4 resize-none",
         )
 
-    def settings_profile_img(src: str):
-        return fh.Img(
-            src=src,
-            cls=f"hide-when-loading w-20 h-20 object-cover rounded-full {shadow} cursor-pointer hover:{img_hover}",
-            id="profile-img-preview",
-        )
-
     def delete_account_button():
         return (
             fh.Button(
@@ -397,7 +413,7 @@ def get_app():  # noqa: C901
                 ),
                 spinner(
                     id="delete-account-loader",
-                    cls=f"w-6 h-6 text-{text_color} hover:text-{text_button_hover_color}",
+                    cls=f"size-6 text-{text_color} hover:text-{text_button_hover_color}",
                 ),
                 id="delete-account-button",
                 hx_delete="/user/settings/delete-account",
@@ -416,7 +432,7 @@ def get_app():  # noqa: C901
                 fh.A(
                     fh.Img(
                         src="/logo.png",
-                        cls="w-12 h-12 object-contain",
+                        cls="size-12 object-contain",
                     ),
                     fh.P(
                         APP_NAME if not suffix else f"{APP_NAME} — {suffix}",
@@ -461,27 +477,10 @@ def get_app():  # noqa: C901
                     fh.Div(
                         fh.Select(
                             fh.Option(
-                                "-- select graduation year --",
-                                disabled="",
-                                selected="",
-                                value="",
-                            ),
-                            *[fh.Option(year, value=year) for year in GRADUATION_YEARS],
-                            id="graduation-year",
-                            name="graduation_year",
-                            hx_post="/set-graduation-year",
-                            hx_target="this",
-                            hx_swap="none",
-                            cls=f"w-full {input_cls}",
-                            required=True,
-                        ),
-                        fh.Select(
-                            fh.Option(
                                 "-- select major --", disabled="", selected="", value=""
                             ),
                             *[fh.Option(major, value=major) for major in MAJORS],
                             id="major",
-                            name="major",
                             hx_post="/set-major",
                             hx_target="this",
                             hx_swap="none",
@@ -497,8 +496,23 @@ def get_app():  # noqa: C901
                             ),
                             *[fh.Option(minor, value=minor) for minor in MINORS],
                             id="minor",
-                            name="minor",
                             hx_post="/set-minor",
+                            hx_target="this",
+                            hx_swap="none",
+                            cls=f"w-full {input_cls}",
+                            required=True,
+                        ),
+                        fh.Select(
+                            fh.Option(
+                                "-- select graduation year --",
+                                disabled="",
+                                selected="",
+                                value="",
+                            ),
+                            *[fh.Option(year, value=year) for year in GRADUATION_YEARS],
+                            id="graduation-year",
+                            name="graduation_year",
+                            hx_post="/set-graduation-year",
                             hx_target="this",
                             hx_swap="none",
                             cls=f"w-full {input_cls}",
@@ -559,10 +573,10 @@ def get_app():  # noqa: C901
                             id="traits",
                             cls="w-full flex flex-col gap-4",
                         ),
-                        schedule_img_container(),
+                        schedule_img_upload_main(),
                         fh.Label(
                             fh.Textarea(
-                                id="bio",
+                                id="bio-text",
                                 placeholder="Bio...",
                                 rows=5,
                                 hx_post="/set-bio",
@@ -575,8 +589,9 @@ def get_app():  # noqa: C901
                             ),
                             spinner(
                                 id="bio-loader",
-                                cls=f"absolute bottom-2 right-2 w-6 h-6 text-{text_color} hover:text-{text_hover_color}",
+                                cls=f"absolute bottom-2 right-2 size-6 text-{text_color} hover:text-{text_hover_color}",
                             ),
+                            id="bio",
                             cls="w-full relative",
                         ),
                         fh.Button(
@@ -587,7 +602,7 @@ def get_app():  # noqa: C901
                             ),
                             spinner(
                                 id="find-matches-loader",
-                                cls=f"w-6 h-6 text-{text_color} hover:text-{text_button_hover_color}",
+                                cls=f"size-6 text-{text_color} hover:text-{text_button_hover_color}",
                             ),
                             id="find-matches-button",
                             type="submit",
@@ -672,21 +687,18 @@ def get_app():  # noqa: C901
                     fh.P(
                         "←",
                         id="carousel-left",
-                        cls=f"absolute left-4 md:left-60 lg:left-80 top-1/2 -translate-y-1/2 z-10 {large_text} font-bold text-{text_color} hover:text-{text_hover_color} cursor-pointer",
+                        cls=f"absolute left-4 md:left-60 lg:left-80 top-1/2 -translate-y-1/2 z-10 {large_text} text-{text_color} hover:text-{text_hover_color} cursor-pointer",
                         onclick="carouselScroll(-1)",
                     ),
                     fh.Div(
                         *[
                             fh.Div(
                                 fh.Div(
-                                    fh.Img(
-                                        src=u.profile_img or "/logo.png",
-                                        cls=f"w-48 h-48 object-cover rounded-full {shadow}",
-                                    ),
+                                    profile_img(src=u.profile_img, cls="size-48"),
                                     fh.Div(
                                         fh.H2(
                                             u.username or u.email,
-                                            cls=f"{large_text} font-bold text-{text_color} text-center",
+                                            cls=f"{large_text} text-{text_color} text-center",
                                         ),
                                         fh.H3(
                                             u.email if u.username else "",
@@ -695,6 +707,17 @@ def get_app():  # noqa: C901
                                         cls="flex flex-col justify-center items-center gap-2",
                                     ),
                                     fh.Div(
+                                        fh.Div(
+                                            fh.P(
+                                                "Joined on",
+                                                cls=f"font-semibold text-{text_color}",
+                                            ),
+                                            fh.P(
+                                                f"{u.created_at.strftime('%B %d, %Y')}",
+                                                cls=f"text-{text_color}",
+                                            ),
+                                            cls="flex flex-col justify-center items-start gap-2",
+                                        ),
                                         fh.Div(
                                             fh.P(
                                                 "Major",
@@ -713,7 +736,7 @@ def get_app():  # noqa: C901
                                                 cls=f"text-{text_color}",
                                             ),
                                             fh.P(
-                                                "Graduation",
+                                                "Graduation Year",
                                                 cls=f"font-semibold text-{text_color}",
                                             ),
                                             fh.P(
@@ -730,7 +753,7 @@ def get_app():  # noqa: C901
                                             fh.P(
                                                 ", ".join(u.interests)
                                                 if u.interests
-                                                else "None",
+                                                else "Not specified",
                                                 cls=f"italic text-{text_color}",
                                             ),
                                             cls="flex flex-col justify-center items-start gap-2",
@@ -743,14 +766,10 @@ def get_app():  # noqa: C901
                                             fh.P(
                                                 ", ".join(u.personality_traits)
                                                 if u.personality_traits
-                                                else "None",
+                                                else "Not specified",
                                                 cls=f"italic text-{text_color}",
                                             ),
                                             cls="flex flex-col justify-center items-start gap-2",
-                                        ),
-                                        fh.Img(
-                                            src=u.schedule.img or "/logo.png",
-                                            cls="w-60 h-auto md:w-96 md:h-auto object-cover",
                                         ),
                                         fh.Div(
                                             fh.P(
@@ -758,16 +777,21 @@ def get_app():  # noqa: C901
                                                 cls=f"font-semibold text-{text_color}",
                                             ),
                                             fh.P(
-                                                u.bio,
+                                                u.bio if u.bio else "Not specified",
                                                 cls=f"text-{text_color} italic",
                                             ),
                                             cls="flex flex-col justify-center items-start gap-2",
+                                        ),
+                                        schedule_img(
+                                            u.schedule.img
+                                            if u.schedule and u.schedule.img
+                                            else ""
                                         ),
                                         cls=f"{input_cls} p-8 {xsmall_text} flex flex-col gap-4",
                                     ),
                                     cls="flex flex-col justify-start items-center gap-8",
                                 ),
-                                cls="hidden",  # Hide all cards initially
+                                cls="hidden",  # hide all cards initially
                             )
                             for u in matches
                         ],
@@ -777,7 +801,7 @@ def get_app():  # noqa: C901
                     fh.P(
                         "→",
                         id="carousel-right",
-                        cls=f"absolute right-4 md:right-60 lg:right-80 top-1/2 -translate-y-1/2 z-10 {large_text} font-bold text-{text_color} hover:text-{text_hover_color} cursor-pointer",
+                        cls=f"absolute right-4 md:right-60 lg:right-80 top-1/2 -translate-y-1/2 z-10 {large_text} text-{text_color} hover:text-{text_hover_color} cursor-pointer",
                         onclick="carouselScroll(1)",
                     ),
                     cls=f"{page_ctnt} relative",
@@ -820,7 +844,24 @@ def get_app():  # noqa: C901
                 feed_msgs(),
                 fh.Form(
                     feed_input(),
-                    hx_trigger="keyup[shiftKey&&key=='Enter'] from:body",
+                    fh.Button(
+                        fh.P(
+                            "→",
+                            id="msg-btn-txt",
+                            cls=f"hide-when-loading text-{text_color} hover:text-{text_button_hover_color}",
+                        ),
+                        spinner(
+                            id="msg-btn-ldr",
+                            cls=f"indicator size-6 text-{text_color} hover:text-{text_button_hover_color}",
+                        ),
+                        id="msg-btn",
+                        type="submit",
+                        cls=f"absolute bottom-0 right-4 rounded-full p-2 {click_button}",
+                        style="width: 3rem; height: 3rem;",
+                    ),
+                    hx_trigger="click from:#msg-btn, keyup[shiftKey&&key=='Enter'] from:body",
+                    hx_indicator="#msg-btn-txt, #msg-btn-ldr",
+                    hx_disabled_elt="#msg, #msg-btn",
                     ws_send=True,
                     cls="w-full relative",
                 ),
@@ -855,7 +896,7 @@ def get_app():  # noqa: C901
                                 fh.NotStr(
                                     si_github.svg,
                                 ),
-                                cls="w-6 h-6",
+                                cls="size-6",
                             ),
                             fh.Div(
                                 "Continue with GitHub",
@@ -871,11 +912,8 @@ def get_app():  # noqa: C901
                 fh.A(
                     fh.Button(
                         fh.Div(
-                            fh.Svg(
-                                fh.NotStr(
-                                    """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12.0003 4.75C13.7703 4.75 15.3553 5.36002 16.6053 6.54998L20.0303 3.125C17.9502 1.19 15.2353 0 12.0003 0C7.31028 0 3.25527 2.69 1.28027 6.60998L5.27028 9.70498C6.21525 6.86002 8.87028 4.75 12.0003 4.75Z" fill="#EA4335"/><path d="M23.49 12.275C23.49 11.49 23.415 10.73 23.3 10H12V14.51H18.47C18.18 15.99 17.34 17.25 16.08 18.1L19.945 21.1C22.2 19.01 23.49 15.92 23.49 12.275Z" fill="#4285F4"/><path d="M5.26498 14.2949C5.02498 13.5699 4.88501 12.7999 4.88501 11.9999C4.88501 11.1999 5.01998 10.4299 5.26498 9.7049L1.275 6.60986C0.46 8.22986 0 10.0599 0 11.9999C0 13.9399 0.46 15.7699 1.28 17.3899L5.26498 14.2949Z" fill="#FBBC05"/><path d="M12.0004 24.0001C15.2404 24.0001 17.9654 22.935 19.9454 21.095L16.0804 18.095C15.0054 18.82 13.6204 19.245 12.0004 19.245C8.8704 19.245 6.21537 17.135 5.2654 14.29L1.27539 17.385C3.25539 21.31 7.3104 24.0001 12.0004 24.0001Z" fill="#34A853"/></svg>"""
-                                ),
-                                cls="w-6 h-6",
+                            google(
+                                cls="size-6",
                             ),
                             fh.Div(
                                 "Continue with Google",
@@ -897,7 +935,6 @@ def get_app():  # noqa: C901
                 fh.Form(
                     fh.Input(
                         id="email",
-                        name="email",
                         type="email",
                         placeholder="Email",
                         required=True,
@@ -905,7 +942,6 @@ def get_app():  # noqa: C901
                     ),
                     fh.Input(
                         id="password",
-                        name="password",
                         type="password",
                         placeholder="Password",
                         required=True,
@@ -919,7 +955,7 @@ def get_app():  # noqa: C901
                         ),
                         spinner(
                             id="signup-loader",
-                            cls=f"w-6 h-6 text-{text_color} hover:text-{text_button_hover_color}",
+                            cls=f"size-6 text-{text_color} hover:text-{text_button_hover_color}",
                         ),
                         id="signup-button",
                         type="submit",
@@ -961,7 +997,7 @@ def get_app():  # noqa: C901
                                 fh.NotStr(
                                     si_github.svg,
                                 ),
-                                cls="w-6 h-6",
+                                cls="size-6",
                             ),
                             fh.Div(
                                 "Continue with GitHub",
@@ -977,11 +1013,8 @@ def get_app():  # noqa: C901
                 fh.A(
                     fh.Button(
                         fh.Div(
-                            fh.Svg(
-                                fh.NotStr(
-                                    """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12.0003 4.75C13.7703 4.75 15.3553 5.36002 16.6053 6.54998L20.0303 3.125C17.9502 1.19 15.2353 0 12.0003 0C7.31028 0 3.25527 2.69 1.28027 6.60998L5.27028 9.70498C6.21525 6.86002 8.87028 4.75 12.0003 4.75Z" fill="#EA4335"/><path d="M23.49 12.275C23.49 11.49 23.415 10.73 23.3 10H12V14.51H18.47C18.18 15.99 17.34 17.25 16.08 18.1L19.945 21.1C22.2 19.01 23.49 15.92 23.49 12.275Z" fill="#4285F4"/><path d="M5.26498 14.2949C5.02498 13.5699 4.88501 12.7999 4.88501 11.9999C4.88501 11.1999 5.01998 10.4299 5.26498 9.7049L1.275 6.60986C0.46 8.22986 0 10.0599 0 11.9999C0 13.9399 0.46 15.7699 1.28 17.3899L5.26498 14.2949Z" fill="#FBBC05"/><path d="M12.0004 24.0001C15.2404 24.0001 17.9654 22.935 19.9454 21.095L16.0804 18.095C15.0054 18.82 13.6204 19.245 12.0004 19.245C8.8704 19.245 6.21537 17.135 5.2654 14.29L1.27539 17.385C3.25539 21.31 7.3104 24.0001 12.0004 24.0001Z" fill="#34A853"/></svg>"""
-                                ),
-                                cls="w-6 h-6",
+                            google(
+                                cls="size-6",
                             ),
                             fh.Div(
                                 "Continue with Google",
@@ -1003,7 +1036,6 @@ def get_app():  # noqa: C901
                 fh.Form(
                     fh.Input(
                         id="email",
-                        name="email",
                         type="email",
                         placeholder="Email",
                         required=True,
@@ -1011,7 +1043,6 @@ def get_app():  # noqa: C901
                     ),
                     fh.Input(
                         id="password",
-                        name="password",
                         type="password",
                         placeholder="Password",
                         required=True,
@@ -1025,7 +1056,7 @@ def get_app():  # noqa: C901
                         ),
                         spinner(
                             id="login-loader",
-                            cls=f"w-6 h-6 text-{text_color} hover:text-{text_button_hover_color}",
+                            cls=f"size-6 text-{text_color} hover:text-{text_button_hover_color}",
                         ),
                         id="login-button",
                         type="submit",
@@ -1070,7 +1101,6 @@ def get_app():  # noqa: C901
                 fh.Input(
                     id="email",
                     type="email",
-                    name="email",
                     placeholder="Email",
                     required=True,
                     cls=f"w-full {input_cls}",
@@ -1083,7 +1113,7 @@ def get_app():  # noqa: C901
                     ),
                     spinner(
                         id="forgot-password-loader",
-                        cls=f"w-6 h-6 text-{text_color} hover:text-{text_button_hover_color}",
+                        cls=f"size-6 text-{text_color} hover:text-{text_button_hover_color}",
                     ),
                     id="forgot-password-button",
                     type="submit",
@@ -1120,14 +1150,13 @@ def get_app():  # noqa: C901
                 ),
                 fh.Input(
                     id="password",
-                    name="password",
                     placeholder="New Password",
                     type="password",
                     required=True,
                     cls=f"w-full {input_cls}",
                 ),
                 fh.Input(
-                    id="confirm_password",
+                    id="confirm-password",
                     name="confirm_password",
                     placeholder="Confirm Password",
                     type="password",
@@ -1149,7 +1178,7 @@ def get_app():  # noqa: C901
                     ),
                     spinner(
                         id="reset-password-loader",
-                        cls=f"w-6 h-6 text-{text_color} hover:text-{text_button_hover_color}",
+                        cls=f"size-6 text-{text_color} hover:text-{text_button_hover_color}",
                     ),
                     id="reset-password-button",
                     type="submit",
@@ -1179,89 +1208,281 @@ def get_app():  # noqa: C901
                 ),
                 cls=page_ctnt,
             )
-        return fh.Main(
-            fh.Div(
+        with get_db_session() as db_session:
+            curr_user = db_session.merge(curr_user)
+            return fh.Main(
                 fh.Div(
-                    fh.Img(
-                        src=curr_user.profile_img,
-                        cls=f"w-20 h-20 object-cover rounded-full {shadow}",
+                    fh.Div(
+                        profile_img(src=curr_user.profile_img, cls="size-20"),
+                        fh.Button(
+                            fh.P(
+                                "Edit",
+                                id="edit-button-text",
+                                cls=f"hide-when-loading text-{text_color} hover:text-{text_button_hover_color}",
+                            ),
+                            spinner(
+                                id="edit-loader",
+                                cls=f"size-6 text-{text_color} hover:text-{text_button_hover_color}",
+                            ),
+                            hx_get="/user/settings/edit",
+                            hx_target="#settings",
+                            hx_swap="outerHTML",
+                            hx_indicator="#edit-button-text, #edit-loader",
+                            hx_disabled_elt="#edit-button",
+                            cls=f"max-w-28 md:max-w-40 flex grow justify-center items-center {click_button} {rounded} {shadow} p-3",
+                        ),
+                        cls="w-full flex justify-between items-center gap-8",
                     ),
-                    fh.Button(
+                    fh.Div(
                         fh.P(
-                            "Edit",
-                            id="edit-button-text",
-                            cls=f"hide-when-loading text-{text_color} hover:text-{text_button_hover_color}",
+                            "Account created via:",
+                            cls=f"font-semibold text-{text_color}",
                         ),
-                        spinner(
-                            id="edit-loader",
-                            cls=f"w-6 h-6 text-{text_color} hover:text-{text_button_hover_color}",
+                        fh.P(
+                            curr_user.login_type.capitalize(),
+                            cls=f"text-{text_color}",
                         ),
-                        hx_get="/user/settings/edit",
-                        hx_target="#settings",
-                        hx_swap="outerHTML",
-                        hx_indicator="#edit-button-text, #edit-loader",
-                        hx_disabled_elt="#edit-button",
-                        cls=f"max-w-28 md:max-w-40 flex grow justify-center items-center {click_button} {rounded} {shadow} p-3",
+                        cls="w-full flex justify-between items-center gap-8",
                     ),
-                    cls="w-full flex justify-between items-center gap-8",
+                    fh.Div(
+                        fh.P("Joined On:", cls=f"font-semibold text-{text_color}"),
+                        fh.P(
+                            curr_user.created_at.strftime("%B %d, %Y"),
+                            cls=f"text-{text_color}",
+                        ),
+                        cls="w-full flex justify-between items-center gap-8",
+                    ),
+                    fh.Div(
+                        fh.P("Email:", cls=f"font-semibold text-{text_color}"),
+                        fh.P(
+                            curr_user.email
+                            if len(curr_user.email) <= max_text_length_lg
+                            else curr_user.email[:max_text_length_lg] + "...",
+                            cls=f"text-{text_color} hidden lg:block",
+                        ),
+                        fh.P(
+                            curr_user.email
+                            if len(curr_user.email) <= max_text_length_md
+                            else curr_user.email[:max_text_length_md] + "...",
+                            cls=f"text-{text_color} hidden md:block lg:hidden",
+                        ),
+                        fh.P(
+                            curr_user.email
+                            if len(curr_user.email) <= max_text_length_sm
+                            else curr_user.email[:max_text_length_sm] + "...",
+                            cls=f"text-{text_color} block md:hidden",
+                        ),
+                        cls="w-full flex justify-between items-center gap-8",
+                    ),
+                    fh.Div(
+                        fh.P("Username:", cls=f"font-semibold text-{text_color}"),
+                        fh.P(
+                            curr_user.username
+                            if len(curr_user.username) <= max_text_length_lg
+                            else curr_user.username[:max_text_length_lg] + "...",
+                            cls=f"text-{text_color} hidden lg:block",
+                        ),
+                        fh.P(
+                            curr_user.username
+                            if len(curr_user.username) <= max_text_length_md
+                            else curr_user.username[:max_text_length_md] + "...",
+                            cls=f"text-{text_color} hidden md:block lg:hidden",
+                        ),
+                        fh.P(
+                            curr_user.username
+                            if len(curr_user.username) <= max_text_length_sm
+                            else curr_user.username[:max_text_length_sm] + "...",
+                            cls=f"text-{text_color} block md:hidden",
+                        ),
+                        cls="w-full flex justify-between items-center gap-8",
+                    ),
+                    fh.Div(
+                        fh.P("Major:", cls=f"font-semibold text-{text_color}"),
+                        fh.P(
+                            curr_user.major
+                            if curr_user.major
+                            and len(curr_user.major) <= max_text_length_lg
+                            else curr_user.major[:max_text_length_lg] + "..."
+                            if curr_user.major
+                            else "Not specified",
+                            cls=f"text-{text_color} hidden lg:block",
+                        ),
+                        fh.P(
+                            curr_user.major
+                            if curr_user.major
+                            and len(curr_user.major) <= max_text_length_md
+                            else curr_user.major[:max_text_length_md] + "..."
+                            if curr_user.major
+                            else "Not specified",
+                            cls=f"text-{text_color} hidden md:block lg:hidden",
+                        ),
+                        fh.P(
+                            curr_user.major
+                            if curr_user.major
+                            and len(curr_user.major) <= max_text_length_sm
+                            else curr_user.major[:max_text_length_sm] + "..."
+                            if curr_user.major
+                            else "Not specified",
+                            cls=f"text-{text_color} block md:hidden",
+                        ),
+                        cls="w-full flex justify-between items-center gap-8",
+                    ),
+                    fh.Div(
+                        fh.P("Minor:", cls=f"font-semibold text-{text_color}"),
+                        fh.P(
+                            curr_user.minor
+                            if curr_user.minor
+                            and len(curr_user.minor) <= max_text_length_lg
+                            else curr_user.minor[:max_text_length_lg] + "..."
+                            if curr_user.minor
+                            else "Not specified",
+                            cls=f"text-{text_color} hidden lg:block",
+                        ),
+                        fh.P(
+                            curr_user.minor
+                            if curr_user.minor
+                            and len(curr_user.minor) <= max_text_length_md
+                            else curr_user.minor[:max_text_length_md] + "..."
+                            if curr_user.minor
+                            else "Not specified",
+                            cls=f"text-{text_color} hidden md:block lg:hidden",
+                        ),
+                        fh.P(
+                            curr_user.minor
+                            if curr_user.minor
+                            and len(curr_user.minor) <= max_text_length_sm
+                            else curr_user.minor[:max_text_length_sm] + "..."
+                            if curr_user.minor
+                            else "Not specified",
+                            cls=f"text-{text_color} block md:hidden",
+                        ),
+                        cls="w-full flex justify-between items-center gap-8",
+                    ),
+                    fh.Div(
+                        fh.P(
+                            "Graduation Year:", cls=f"font-semibold text-{text_color}"
+                        ),
+                        fh.P(
+                            str(curr_user.graduation_year)
+                            if curr_user.graduation_year
+                            else "Not specified",
+                            cls=f"text-{text_color}",
+                        ),
+                        cls="w-full flex justify-between items-center gap-8",
+                    ),
+                    fh.Div(
+                        fh.P("Interests:", cls=f"font-semibold text-{text_color}"),
+                        fh.P(
+                            ", ".join(curr_user.interests)
+                            if curr_user.interests
+                            and len(", ".join(curr_user.interests))
+                            <= max_text_length_lg
+                            else ", ".join(curr_user.interests)[:max_text_length_lg]
+                            + "..."
+                            if curr_user.interests
+                            else "Not specified",
+                            cls=f"text-{text_color} hidden lg:block",
+                        ),
+                        fh.P(
+                            ", ".join(curr_user.interests)
+                            if curr_user.interests
+                            and len(", ".join(curr_user.interests))
+                            <= max_text_length_md
+                            else ", ".join(curr_user.interests)[:max_text_length_md]
+                            + "..."
+                            if curr_user.interests
+                            else "Not specified",
+                            cls=f"text-{text_color} hidden md:block lg:hidden",
+                        ),
+                        fh.P(
+                            ", ".join(curr_user.interests)
+                            if curr_user.interests
+                            and len(", ".join(curr_user.interests))
+                            <= max_text_length_sm
+                            else ", ".join(curr_user.interests)[:max_text_length_sm]
+                            + "..."
+                            if curr_user.interests
+                            else "Not specified",
+                            cls=f"text-{text_color} block md:hidden",
+                        ),
+                        cls="w-full flex justify-between items-center gap-8",
+                    ),
+                    fh.Div(
+                        fh.P(
+                            "Personality Traits:",
+                            cls=f"font-semibold text-{text_color}",
+                        ),
+                        fh.P(
+                            ", ".join(curr_user.personality_traits)
+                            if curr_user.personality_traits
+                            and len(", ".join(curr_user.personality_traits))
+                            <= max_text_length_lg
+                            else ", ".join(curr_user.personality_traits)[
+                                :max_text_length_lg
+                            ]
+                            + "..."
+                            if curr_user.personality_traits
+                            else "Not specified",
+                            cls=f"text-{text_color} hidden lg:block",
+                        ),
+                        fh.P(
+                            ", ".join(curr_user.personality_traits)
+                            if curr_user.personality_traits
+                            and len(", ".join(curr_user.personality_traits))
+                            <= max_text_length_md
+                            else ", ".join(curr_user.personality_traits)[
+                                :max_text_length_md
+                            ]
+                            + "..."
+                            if curr_user.personality_traits
+                            else "Not specified",
+                            cls=f"text-{text_color} hidden md:block lg:hidden",
+                        ),
+                        fh.P(
+                            ", ".join(curr_user.personality_traits)
+                            if curr_user.personality_traits
+                            and len(", ".join(curr_user.personality_traits))
+                            <= max_text_length_sm
+                            else ", ".join(curr_user.personality_traits)[
+                                :max_text_length_sm
+                            ]
+                            + "..."
+                            if curr_user.personality_traits
+                            else "Not specified",
+                            cls=f"text-{text_color} block md:hidden",
+                        ),
+                        cls="w-full flex justify-between items-center gap-8",
+                    ),
+                    fh.Div(
+                        fh.P("Bio:", cls=f"font-semibold text-{text_color}"),
+                        fh.P(
+                            curr_user.bio if curr_user.bio else "Not specified",
+                            cls=f"text-{text_color}",
+                        ),
+                        cls="w-full flex flex-col justify-center items-start gap-4",
+                    ),
+                    fh.Div(
+                        fh.P("Schedule:", cls=f"font-semibold text-{text_color}"),
+                        schedule_img(
+                            curr_user.schedule.img
+                            if curr_user.schedule and curr_user.schedule.img
+                            else ""
+                        ),
+                        cls="w-full flex flex-col justify-center items-start gap-4",
+                    ),
+                    fh.Div(
+                        fh.P("Password:", cls=f"font-semibold text-{text_color}"),
+                        fh.P("********", cls=f"text-{text_color}"),
+                        cls="w-full flex justify-between items-center gap-8",
+                    )
+                    if curr_user.login_type == "email"
+                    else None,
+                    delete_account_button(),
+                    id="settings",
+                    cls=f"w-full md:w-1/3 {input_cls} p-8 flex flex-col justify-center items-center gap-8",
                 ),
-                fh.Div(
-                    fh.P("Email:", cls=f"text-{text_color}"),
-                    fh.P(
-                        curr_user.email
-                        if len(curr_user.email) <= max_text_length_lg
-                        else curr_user.email[:max_text_length_lg] + "...",
-                        cls=f"text-{text_color} hidden lg:block",
-                    ),
-                    fh.P(
-                        curr_user.email
-                        if len(curr_user.email) <= max_text_length_md
-                        else curr_user.email[:max_text_length_md] + "...",
-                        cls=f"text-{text_color} hidden md:block lg:hidden",
-                    ),
-                    fh.P(
-                        curr_user.email
-                        if len(curr_user.email) <= max_text_length_sm
-                        else curr_user.email[:max_text_length_sm] + "...",
-                        cls=f"text-{text_color} block md:hidden",
-                    ),
-                    cls="w-full flex justify-between items-center gap-8",
-                ),
-                fh.Div(
-                    fh.P("Username:", cls=f"text-{text_color}"),
-                    fh.P(
-                        curr_user.username
-                        if len(curr_user.username) <= max_text_length_lg
-                        else curr_user.username[:max_text_length_lg] + "...",
-                        cls=f"text-{text_color} hidden lg:block",
-                    ),
-                    fh.P(
-                        curr_user.username
-                        if len(curr_user.username) <= max_text_length_md
-                        else curr_user.username[:max_text_length_md] + "...",
-                        cls=f"text-{text_color} hidden md:block lg:hidden",
-                    ),
-                    fh.P(
-                        curr_user.username
-                        if len(curr_user.username) <= max_text_length_sm
-                        else curr_user.username[:max_text_length_sm] + "...",
-                        cls=f"text-{text_color} block md:hidden",
-                    ),
-                    cls="w-full flex justify-between items-center gap-8",
-                ),
-                fh.Div(
-                    fh.P("Password:", cls=f"text-{text_color}"),
-                    fh.P("********", cls=f"text-{text_color}"),
-                    cls="w-full flex justify-between items-center gap-8",
-                )
-                if curr_user.login_type == "email"
-                else None,
-                delete_account_button(),
-                id="settings",
-                cls=f"w-full md:w-1/3 {input_cls} p-8 flex flex-col justify-center items-center gap-8",
-            ),
-            cls=page_ctnt,
-        )
+                cls=page_ctnt,
+            )
 
     # helper fns
     def validate_image_base64(image_base64: str) -> dict[str, str]:
@@ -1528,9 +1749,9 @@ def get_app():  # noqa: C901
         if "error" in res.keys():
             return (
                 fh.Div(
-                    id="schedule-img-preview",
+                    id="schedule-img-display",
                 ),
-                schedule_img_container(),
+                schedule_img_upload_main(),
                 toast_container(message=res["error"], type="error", hidden=False),
             )
 
@@ -1543,9 +1764,9 @@ def get_app():  # noqa: C901
         if not is_valid_schedule:
             return (
                 fh.Div(
-                    id="schedule-img-preview",
+                    id="schedule-img-display",
                 ),
-                schedule_img_container(),
+                schedule_img_upload_main(),
                 toast_container(
                     message="Invalid schedule image.", type="error", hidden=False
                 ),
@@ -1557,13 +1778,7 @@ def get_app():  # noqa: C901
             db_session.commit()
             db_session.refresh(schedule)
             session["schedule_id"] = schedule.id
-            return (
-                fh.Img(
-                    src=schedule_img,
-                    id="schedule-img-preview",
-                    cls="w-60 h-auto md:w-96 md:h-auto object-cover",
-                ),
-            )
+            return schedule_img(schedule_img)
 
     @f_app.post("/set-bio")
     def set_bio(session, bio: str):
@@ -1573,10 +1788,6 @@ def get_app():  # noqa: C901
     ## find matches
     @f_app.post("/find-matches")
     def find_matches(session):
-        if not session["graduation_year"]:
-            return toast_container(
-                message="Please select a graduation year.", type="error", hidden=False
-            )
         if not session["major"]:
             return toast_container(
                 message="Please select a major.", type="error", hidden=False
@@ -1586,6 +1797,10 @@ def get_app():  # noqa: C901
                 message="Please select at least one interest.",
                 type="error",
                 hidden=False,
+            )
+        if not session["graduation_year"]:
+            return toast_container(
+                message="Please select a graduation year.", type="error", hidden=False
             )
         if not json.loads(session["traits"]):
             return toast_container(
@@ -1623,9 +1838,9 @@ def get_app():  # noqa: C901
             db_session.commit()
             db_session.refresh(curr_user)
 
-        session["graduation_year"] = None
         session["major"] = None
         session["minor"] = None
+        session["graduation_year"] = None
         session["interests"] = None
         session["traits"] = None
         session["schedule_id"] = None
@@ -1645,6 +1860,11 @@ def get_app():  # noqa: C901
     async def ws(session, msg: str, send):
         await send(feed_input())
         if not msg.strip():
+            await send(
+                toast_container(
+                    message="Please enter a message.", type="error", hidden=False
+                )
+            )
             return
 
         curr_user = get_curr_user(session)
@@ -1666,10 +1886,7 @@ def get_app():  # noqa: C901
 
         return fh.Div(
             fh.Div(
-                fh.Img(
-                    src=curr_user.profile_img,
-                    cls=f"w-12 h-12 object-cover hover:{img_hover} rounded-full {shadow}",
-                ),
+                profile_img(src=curr_user.profile_img, cls="size-12"),
                 fh.P(
                     curr_user.username
                     if len(curr_user.username) <= max_username_length
@@ -1712,7 +1929,7 @@ def get_app():  # noqa: C901
                     ),
                     spinner(
                         id="logout-loader",
-                        cls=f"w-6 h-6 text-{text_color} hover:text-{text_button_hover_color}",
+                        cls=f"size-6 text-{text_color} hover:text-{text_button_hover_color}",
                     ),
                     cls=f"w-full {click_button} {rounded} {shadow} p-3",
                     hx_get="/auth/logout",
@@ -2011,19 +2228,22 @@ def get_app():  # noqa: C901
                             name="profile_img_file",
                             type="file",
                             accept="image/*",
-                            hx_post="/user/settings/update-preview",
-                            hx_target="#profile-img-preview",
+                            hx_post="/user/settings/update-profile",
+                            hx_target="#profile-img-display",
                             hx_swap="outerHTML",
                             hx_trigger="change",
-                            hx_indicator="#profile-img-preview, #profile-img-loader",
+                            hx_indicator="#profile-img-display, #profile-img-loader",
                             hx_disabled_elt="#new-profile-img-upload, #save-button, #delete-account-button",
                             hx_encoding="multipart/form-data",
                             cls="hidden",
                         ),
-                        settings_profile_img(curr_user.profile_img),
+                        profile_img(
+                            curr_user.profile_img,
+                            cls=f"hide-when-loading size-20 cursor-pointer hover:{img_hover}",
+                        ),
                         spinner(
                             id="profile-img-loader",
-                            cls=f"w-12 h-12 text-{text_color} hover:text-{text_hover_color}",
+                            cls=f"size-12 text-{text_color} hover:text-{text_hover_color}",
                         ),
                     ),
                     fh.Button(
@@ -2034,7 +2254,7 @@ def get_app():  # noqa: C901
                         ),
                         spinner(
                             id="save-loader",
-                            cls=f"w-6 h-6 text-{text_color} hover:text-{text_button_hover_color}",
+                            cls=f"size-6 text-{text_color} hover:text-{text_button_hover_color}",
                         ),
                         id="save-button",
                         type="submit",
@@ -2042,7 +2262,7 @@ def get_app():  # noqa: C901
                         hx_target="this",
                         hx_swap="none",
                         hx_indicator="#save-button-text, #save-loader",
-                        hx_disabled_elt="#new-profile-img-upload, #email, #username, #password, #save-button",
+                        hx_disabled_elt="#new-profile-img-upload, #email, #username, #password, #major, #minor, #graduation_year, #interests, #traits, #bio, #new-schedule-img-upload, #save-button",
                         hx_include="#new-profile-img-upload",
                         hx_encoding="multipart/form-data",
                         cls=f"max-w-28 md:max-w-40 flex grow justify-center items-center {click_button} {rounded} p-3",
@@ -2054,7 +2274,6 @@ def get_app():  # noqa: C901
                     fh.Input(
                         id="email",
                         value=curr_user.email,
-                        name="email",
                         type="email",
                         cls=f"max-w-28 md:max-w-40 flex grow justify-center items-center {input_cls}",
                     ),
@@ -2065,17 +2284,157 @@ def get_app():  # noqa: C901
                     fh.Input(
                         id="username",
                         value=curr_user.username,
-                        name="username",
                         cls=f"max-w-28 md:max-w-40 flex grow justify-center items-center {input_cls}",
                     ),
                     cls="w-full flex justify-between items-center gap-8",
                 ),
                 fh.Div(
-                    fh.P("Password:", cls=f"text-{text_color}"),
+                    fh.P("Major:", cls=f"font-semibold text-{text_color}"),
+                    fh.Select(
+                        fh.Option(
+                            "-- select major --", disabled="", selected="", value=""
+                        ),
+                        *[
+                            fh.Option(
+                                major, value=major, selected=major == curr_user.major
+                            )
+                            for major in MAJORS
+                        ],
+                        id="major",
+                        cls=f"max-w-28 md:max-w-40 flex grow justify-center items-center {input_cls}",
+                    ),
+                    cls="w-full flex justify-between items-center gap-8",
+                ),
+                fh.Div(
+                    fh.P("Minor:", cls=f"font-semibold text-{text_color}"),
+                    fh.Select(
+                        fh.Option(
+                            "-- select minor (optional) --",
+                            disabled="",
+                            selected="",
+                            value="",
+                        ),
+                        *[
+                            fh.Option(
+                                minor, value=minor, selected=minor == curr_user.minor
+                            )
+                            for minor in MINORS
+                        ],
+                        id="minor",
+                        cls=f"max-w-28 md:max-w-40 flex grow justify-center items-center {input_cls}",
+                    ),
+                    cls="w-full flex justify-between items-center gap-8",
+                ),
+                fh.Div(
+                    fh.P("Graduation Year:", cls=f"font-semibold text-{text_color}"),
+                    fh.Select(
+                        fh.Option(
+                            "-- select graduation year --",
+                            disabled="",
+                            selected="",
+                            value="",
+                        ),
+                        *[
+                            fh.Option(
+                                year,
+                                value=year,
+                                selected=str(year) == str(curr_user.graduation_year),
+                            )
+                            for year in GRADUATION_YEARS
+                        ],
+                        id="graduation_year",
+                        cls=f"max-w-28 md:max-w-40 flex grow justify-center items-center {input_cls}",
+                    ),
+                    cls="w-full flex justify-between items-center gap-8",
+                ),
+                fh.Div(
+                    fh.P("Interests:", cls=f"font-semibold text-{text_color}"),
+                    fh.Div(
+                        *[
+                            fh.Div(
+                                fh.Label(
+                                    fh.Input(
+                                        type="checkbox",
+                                        name="interest",
+                                        value=interest,
+                                        checked=interest in (curr_user.interests or []),
+                                    ),
+                                    interest,
+                                    cls=f"text-{text_color} flex justify-start items-center gap-1",
+                                ),
+                                cls="flex justify-start items-center",
+                            )
+                            for interest in INTERESTS
+                        ],
+                        cls="grid grid-cols-1 md:grid-cols-2 gap-2",
+                    ),
+                    id="interests",
+                    cls="w-full flex flex-col gap-4",
+                ),
+                fh.Div(
+                    fh.P("Personality Traits:", cls=f"font-semibold text-{text_color}"),
+                    fh.Div(
+                        *[
+                            fh.Div(
+                                fh.Label(
+                                    fh.Input(
+                                        type="checkbox",
+                                        name="trait",
+                                        value=trait,
+                                        checked=trait
+                                        in (curr_user.personality_traits or []),
+                                    ),
+                                    trait,
+                                    cls=f"text-{text_color} flex justify-start items-center gap-1",
+                                ),
+                                cls="flex justify-start items-center",
+                            )
+                            for trait in PERSONALITY_TRAITS
+                        ],
+                        cls="grid grid-cols-1 md:grid-cols-2 gap-2",
+                    ),
+                    id="traits",
+                    cls="w-full flex flex-col gap-4",
+                ),
+                fh.Div(
+                    fh.P("Bio:", cls=f"font-semibold text-{text_color}"),
+                    fh.Textarea(
+                        id="bio",
+                        cls=f"max-w-28 md:max-w-40 flex grow justify-center items-center {input_cls}",
+                    ),
+                    cls="w-full flex justify-between items-center gap-8",
+                ),
+                fh.Label(
+                    fh.Input(
+                        id="new-schedule-img-upload",
+                        name="schedule_img_file",
+                        type="file",
+                        accept="image/*",
+                        hx_post="/user/settings/update-schedule",
+                        hx_target="#schedule-img-settings-preview",
+                        hx_swap="outerHTML",
+                        hx_trigger="change",
+                        hx_indicator="#schedule-img-settings-preview, #schedule-img-loader",
+                        hx_disabled_elt="#new-schedule-img-upload, #save-button, #delete-account-button",
+                        hx_encoding="multipart/form-data",
+                        cls="hidden",
+                    ),
+                    schedule_img(
+                        curr_user.schedule.img
+                        if curr_user.schedule and curr_user.schedule.img
+                        else "",
+                        cls=f"hide-when-loading cursor-pointer hover:{img_hover}",
+                    ),
+                    spinner(
+                        id="schedule-img-loader",
+                        cls=f"size-12 text-{text_color} hover:text-{text_hover_color}",
+                    ),
+                ),
+                fh.Div(
+                    fh.P("Password:", cls=f"font-semibold text-{text_color}"),
                     fh.Input(
                         id="password",
                         value="",
-                        name="password",
                         type="password",
                         cls=f"max-w-28 md:max-w-40 flex grow justify-center items-center {input_cls}",
                     ),
@@ -2087,10 +2446,14 @@ def get_app():  # noqa: C901
                 id="settings",
                 cls=f"w-full md:w-1/3 {input_cls} p-8 flex flex-col justify-center items-center gap-8",
             ),
+        ), fh.Script(
+            f"""
+            document.getElementById('bio').value = "{curr_user.bio if curr_user.bio else ""}";
+        """,
         )
 
-    @f_app.post("/user/settings/update-preview")
-    def update_preview(
+    @f_app.post("/user/settings/update-profile")
+    def update_profile(
         session,
         profile_img_file: fh.UploadFile,
     ):
@@ -2099,22 +2462,67 @@ def get_app():  # noqa: C901
         if "error" in res.keys():
             return (
                 (
-                    settings_profile_img(curr_user.profile_img),
+                    profile_img(
+                        curr_user.profile_img,
+                        cls=f"hide-when-loading size-20 cursor-pointer hover:{img_hover}",
+                    ),
                     toast_container(message=res["error"], type="error", hidden=False),
                 ),
             )
-        return settings_profile_img(f"data:image/png;base64,{res['success']}")
+        return profile_img(
+            f"data:image/png;base64,{res['success']}",
+            cls=f"hide-when-loading size-20 cursor-pointer hover:{img_hover}",
+        )
+
+    @f_app.post("/user/settings/update-schedule")
+    def update_schedule(
+        session,
+        schedule_file: fh.UploadFile,
+    ):
+        curr_user = get_curr_user(session)
+        res = validate_image_file(schedule_file)
+        if "error" in res.keys():
+            return (
+                (
+                    schedule_img(
+                        curr_user.schedule.img
+                        if curr_user.schedule and curr_user.schedule.img
+                        else "",
+                        cls=f"hide-when-loading cursor-pointer hover:{img_hover}",
+                    ),
+                    toast_container(message=res["error"], type="error", hidden=False),
+                ),
+            )
+        return schedule_img(
+            f"data:image/png;base64,{res['success']}",
+            cls=f"hide-when-loading cursor-pointer hover:{img_hover}",
+        )
 
     @f_app.patch("/user/settings/save")
     def save_settings(
         session,
+        profile_img_file: fh.UploadFile | None = None,
         email: str | None = None,
         username: str | None = None,
+        major: str | None = None,
+        minor: str | None = None,
+        graduation_year: str | None = None,
+        interests: list[str] | None = None,
+        traits: list[str] | None = None,
+        bio: str | None = None,
+        schedule_img_file: fh.UploadFile | None = None,
         password: str | None = None,
-        profile_img_file: fh.UploadFile | None = None,
     ):
         curr_user = get_curr_user(session)
         with get_db_session() as db_session:
+            if profile_img_file is not None and not profile_img_file.filename == "":
+                res = validate_image_file(profile_img_file)
+                if "error" in res.keys():
+                    return toast_container(
+                        message=res["error"], type="error", hidden=False
+                    )
+                curr_user.profile_img = f"data:image/png;base64,{res['success']}"
+
             if email and email != curr_user.email:
                 query = select(User).where(User.email == email)
                 db_user = db_session.exec(query).first()
@@ -2123,7 +2531,6 @@ def get_app():  # noqa: C901
                         message="Email already exists", type="error", hidden=False
                     )
             curr_user.email = email
-
             if username and username != curr_user.username:
                 query = select(User).where(User.username == username)
                 db_user = db_session.exec(query).first()
@@ -2133,16 +2540,32 @@ def get_app():  # noqa: C901
                     )
             curr_user.username = username
 
-            if curr_user.login_type == "email" and password:
-                curr_user.hashed_password = pbkdf2_sha256.hash(password)
-
-            if profile_img_file is not None and not profile_img_file.filename == "":
-                res = validate_image_file(profile_img_file)
+            if major and major != curr_user.major:
+                curr_user.major = major
+            if minor and minor != curr_user.minor:
+                curr_user.minor = minor
+            if graduation_year and graduation_year != curr_user.graduation_year:
+                curr_user.graduation_year = graduation_year
+            if interests and interests != curr_user.interests:
+                curr_user.interests = interests
+            if traits and traits != curr_user.personality_traits:
+                curr_user.personality_traits = traits
+            if bio and bio != curr_user.bio:
+                curr_user.bio = bio
+            if schedule_img_file is not None and not schedule_img_file.filename == "":
+                res = validate_image_file(schedule_img_file)
                 if "error" in res.keys():
                     return toast_container(
                         message=res["error"], type="error", hidden=False
                     )
-                curr_user.profile_img = f"data:image/png;base64,{res['success']}"
+                curr_user.schedule.img = f"data:image/png;base64,{res['success']}"
+
+            if (
+                curr_user.login_type == "email"
+                and password
+                and not pbkdf2_sha256.verify(password, curr_user.hashed_password)
+            ):
+                curr_user.hashed_password = pbkdf2_sha256.hash(password)
 
             db_session.add(curr_user)
             db_session.commit()
