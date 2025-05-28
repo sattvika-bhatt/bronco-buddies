@@ -168,12 +168,8 @@ cython_debug/
 #.idea/
 
 # config
-.vscode
 .env.*
 
 # FastHTML
 .sesskey
 Python-Antivirus
-
-# db
-db/migrations/versions
