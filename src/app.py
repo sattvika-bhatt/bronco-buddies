@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -68,6 +68,7 @@ app.include(helpers_app)
 # -----------------------------------------------------------------------------
 
 with FE_IMAGE.imports():
+    from dateutil import tz
     from fasthtml import common as fh
     from fasthtml.oauth import GitHubAppClient, GoogleAppClient, redir_url
     from passlib.hash import pbkdf2_sha256
@@ -251,6 +252,12 @@ def get_app():  # noqa: C901
         os.getenv("GITHUB_CLIENT_ID"), os.getenv("GITHUB_CLIENT_SECRET")
     )
 
+    # timezone
+    def to_local(dt: datetime) -> datetime:
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(tz.tzlocal())
+
     # ui components
     def spinner(id="", cls=""):
         return (
@@ -366,7 +373,7 @@ def get_app():  # noqa: C901
                                     cls=f"{small_text} font-semibold text-{text_color} break-all",
                                 ),
                                 fh.P(
-                                    m.created_at.strftime("%b %d, %I:%M %p"),
+                                    to_local(m.created_at).strftime("%b %d, %I:%M %p"),
                                     cls=f"{small_text} text-{text_color} opacity-75",
                                 ),
                                 cls="flex justify-between items-center gap-4",
@@ -753,7 +760,7 @@ def get_app():  # noqa: C901
                                                 cls=f"font-semibold text-{text_color}",
                                             ),
                                             fh.P(
-                                                f"{u.created_at.strftime('%B %d, %Y')}",
+                                                f"{to_local(u.created_at).strftime('%B %d, %Y')}",
                                                 cls=f"text-{text_color}",
                                             ),
                                             cls="flex flex-col justify-center items-start gap-2",
@@ -1287,7 +1294,7 @@ def get_app():  # noqa: C901
                     fh.Div(
                         fh.P("Joined On:", cls=f"font-semibold text-{text_color}"),
                         fh.P(
-                            curr_user.created_at.strftime("%B %d, %Y"),
+                            to_local(curr_user.created_at).strftime("%B %d, %Y"),
                             cls=f"text-{text_color}",
                         ),
                         cls="w-full flex justify-between items-center gap-8",
@@ -2106,7 +2113,9 @@ def get_app():  # noqa: C901
 
             reset_token = str(uuid.uuid4())
             db_user.reset_token = reset_token
-            db_user.reset_token_expiry = datetime.now() + timedelta(hours=token_expiry)
+            db_user.reset_token_expiry = to_local(datetime.now()) + timedelta(
+                hours=token_expiry
+            )
             db_session.add(db_user)
             db_session.commit()
             db_session.refresh(db_user)
@@ -2128,8 +2137,8 @@ def get_app():  # noqa: C901
             query = select(User).where(User.reset_token == token)
             db_user = db_session.exec(query).first()
             if not db_user:
-                return fh.Redirect("/login")
-            if db_user.reset_token_expiry < datetime.now():
+                return fh.Redirect(loc="/login")
+            if to_local(db_user.reset_token_expiry) < to_local(datetime.now()):
                 return fh.Redirect("/login")
 
             db_user.hashed_password = pbkdf2_sha256.hash(password)

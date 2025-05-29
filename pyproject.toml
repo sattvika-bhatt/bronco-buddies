@@ -21,7 +21,6 @@ dependencies = [
 
 [dependency-groups]
 gpu = [
-    "flash-attn>=2.7.4.post1",
     "flashinfer-python>=0.2.5",
     "huggingface-hub[hf-transfer]>=0.30.2",
     "ninja>=1.11.1.4",
