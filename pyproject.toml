@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.15.2",
+    "flashinfer-python>=0.2.5",
+    "huggingface-hub[hf-transfer]>=0.30.2",
     "modal>=1.0.1",
     "passlib>=1.7.4",
     "pillow>=11.2.1",
@@ -13,20 +15,19 @@ dependencies = [
     "pytest>=8.3.5",
     "python-dotenv>=1.1.0",
     "python-fasthtml>=0.12.12",
+    "rerankers>=0.9.1.post1",
+    "sentence-transformers>=4.1.0",
     "simpleicons>=7.21.0",
     "sqlalchemy>=2.0.40",
     "sqlmodel>=0.0.24",
     "starlette>=0.46.2",
+    "vllm>=0.8.5",
 ]
 
 [dependency-groups]
-gpu = [
-    "flashinfer-python>=0.2.5",
-    "huggingface-hub[hf-transfer]>=0.30.2",
+flash-attn = [
     "ninja>=1.11.1.4",
     "packaging>=24.2",
-    "rerankers>=0.9.1.post1",
-    "sentence-transformers>=4.1.0",
-    "vllm>=0.8.5",
     "wheel>=0.45.1",
+    "flash-attn>=2.7.4.post1",
 ]

@@ -11,6 +11,7 @@ Set up the environment:
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
+# (if you have a compatible GPU, run:) uv sync --group flash-attn  
 uv run pre-commit install
 source .venv/bin/activate
 modal setup
