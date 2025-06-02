@@ -2856,9 +2856,9 @@ f_app = get_app()
 @app.function(
     image=FE_IMAGE,
     secrets=SECRETS,
-    timeout=5 * MINUTES,
+    timeout=24 * 60 * MINUTES,
     max_containers=1,  # since we're using a session cookie, we need to limit the number of containers
-    scaledown_window=15 * MINUTES,
+    scaledown_window=60 * MINUTES,
 )
 @modal.concurrent(max_inputs=1000)
 @modal.asgi_app()

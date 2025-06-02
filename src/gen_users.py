@@ -169,7 +169,7 @@ def gen_fake_users(user_idxs: list[int]) -> list[dict]:
     cpu=0.25,
     memory=128,
     secrets=SECRETS,
-    timeout=5 * MINUTES,
+    timeout=1 * MINUTES,
 )
 @modal.concurrent(max_inputs=llm_max_num_seqs)
 def insert_users(gen_users_data: list[dict]):
@@ -195,7 +195,7 @@ default_num_users = llm_max_num_seqs
     memory=128,
     volumes=VOLUME_CONFIG,
     secrets=SECRETS,
-    timeout=60 * MINUTES,
+    timeout=10 * MINUTES,
 )
 def main(num_users: int):
     print(f"Creating {num_users} users...")
