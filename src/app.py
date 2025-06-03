@@ -264,7 +264,7 @@ def get_app():  # noqa: C901
         return (
             fh.Svg(
                 fh.NotStr(
-                    """<svg class="animate-spin" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    """<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" />
                         <path class="opacity-75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" fill="currentColor" />
                     </svg>"""
@@ -634,7 +634,9 @@ def get_app():  # noqa: C901
         )
 
     def matches_content(session):
-        max_matches = 50
+        max_matches_show = 50  # how many matches to display
+        num_rank_candidates = 500  # how many users to send to the ranking service
+
         with get_db_session() as db_session:
             curr_user = get_curr_user(session)
             if curr_user is None:
@@ -647,80 +649,69 @@ def get_app():  # noqa: C901
                 )
 
             curr_user = db_session.merge(curr_user)  # make relationships accessible
+            ranked_users = []
             if curr_user.waiting_for_match:
                 fn = rank_users.local if modal.is_local() else rank_users.remote
 
-                users = db_session.exec(
-                    select(User)
-                    .where(User.uuid != curr_user.uuid)
-                    .limit(max_matches)
-                    .order_by(func.random())
-                ).all()
-                if len(users) > 0:
-                    user_strs = [str(u) for u in users]
-                    ranked_user_strs = fn(
-                        str(curr_user),
-                        user_strs,
-                    )
-                    ranked_users = [
-                        next(u for u in users if str(u) == user_str)
-                        for user_str in ranked_user_strs
+                existing_matches = list(
+                    curr_user.incoming_matches + curr_user.outgoing_matches
+                )
+                existing_match_ids: set[int] = {
+                    m.user1.id if m.user1.id != curr_user.id else m.user2.id
+                    for m in existing_matches
+                }
+                if existing_matches:
+                    users_to_rank = [
+                        m.user1 if m.user1.id != curr_user.id else m.user2
+                        for m in existing_matches
                     ]
-
-                    # Get all existing matches for current user
-                    existing_matches = db_session.exec(
-                        select(Match).where(
-                            (Match.user_id_1 == curr_user.id)
-                            | (Match.user_id_2 == curr_user.id)
-                        )
+                else:
+                    users_to_rank = db_session.exec(
+                        select(User)
+                        .where(User.uuid != curr_user.uuid)
+                        .order_by(func.random())
+                        .limit(num_rank_candidates)
                     ).all()
 
-                    # Get set of all user IDs that are currently ranked
-                    ranked_user_ids = {u.id for u in ranked_users}
-
-                    # Remove matches that don't align with current ranked users
-                    for match in existing_matches:
-                        other_id = (
-                            match.user_id_1
-                            if match.user_id_1 != curr_user.id
-                            else match.user_id_2
-                        )
-                        if other_id not in ranked_user_ids:
-                            db_session.delete(match)
-
-                    # Get remaining valid matches
-                    existing_user_ids = {
-                        match.user_id_1
-                        if match.user_id_1 != curr_user.id
-                        else match.user_id_2
-                        for match in existing_matches
-                        if (
-                            match.user_id_1 in ranked_user_ids
-                            or match.user_id_2 in ranked_user_ids
-                        )
-                    }
-
-                    # Create new matches for ranked users without existing matches
-                    for user in ranked_users:
-                        if user.id not in existing_user_ids:
-                            match = Match(user1=curr_user, user2=user)
-                            db_session.add(match)
+                ranked_users: list[User] = []
+                if users_to_rank:
+                    str_map = {str(u): u for u in users_to_rank}
+                    ranked_user_strs = fn(str(curr_user), list(str_map.keys()))
+                    ranked_users = []
+                    seen_ids: set[int] = set()
+                    for s in ranked_user_strs:
+                        u = str_map[s]
+                        if u.id not in seen_ids:
+                            ranked_users.append(u)
+                            seen_ids.add(u.id)
+                    new_matches = [
+                        u for u in ranked_users if u.id not in existing_match_ids
+                    ]
+                    db_session.add_all(
+                        Match(user1=curr_user, user2=u) for u in new_matches
+                    )
 
                 curr_user.waiting_for_match = False
                 db_session.commit()
                 db_session.refresh(curr_user)
 
-            matches = curr_user.incoming_matches + curr_user.outgoing_matches
-            match_users = []
-            seen_user_ids = set()
-            for m in matches:
-                if len(match_users) >= max_matches:
-                    break
-                other = m.user1 if m.user1.id != curr_user.id else m.user2
-                if other.id not in seen_user_ids:
-                    match_users.append(other)
-                    seen_user_ids.add(other.id)
-            matches = match_users
+            display_users: list[User] = []
+            if ranked_users:
+                display_users = ranked_users[:max_matches_show]
+            else:
+                existing_matches = sorted(
+                    curr_user.incoming_matches + curr_user.outgoing_matches,
+                    key=lambda m: m.created_at,
+                )
+                seen_ids: set[int] = set()
+                for m in existing_matches:
+                    if len(display_users) >= max_matches_show:
+                        break
+                    other = m.user1 if m.user1.id != curr_user.id else m.user2
+                    if other.id not in seen_ids:
+                        display_users.append(other)
+                        seen_ids.add(other.id)
+            matches = display_users
 
             if not matches:
                 return fh.Main(
@@ -900,7 +891,7 @@ def get_app():  # noqa: C901
                         ),
                         spinner(
                             id="msg-btn-ldr",
-                            cls=f"indicator size-6 text-{text_color} hover:text-{text_button_hover_color}",
+                            cls=f"size-6 text-{text_color} hover:text-{text_button_hover_color}",
                         ),
                         id="msg-btn",
                         type="submit",

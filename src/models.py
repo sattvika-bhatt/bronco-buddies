@@ -80,7 +80,7 @@ class User(SQLModel, table=True):
         Interests: {', '.join(interests) or 'Not specified'}
         Personality Traits: {', '.join(traits) or 'Not specified'}
         Bio: {self.bio or 'Not specified'}
-        Schedule: {self.schedule.text or 'Not specified'}
+        Schedule: {self.schedule.text if self.schedule and self.schedule.text else 'Not specified'}
         """
 
 
