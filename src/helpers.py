@@ -20,7 +20,8 @@ vlm_max_num_batched_tokens = vlm_max_model_len
 
 
 reranker_name = "answerdotai/answerai-colbert-small-v1"
-batch_size = 16
+reranker_batch_size = 16
+reranker_concurrent_inputs = 1000
 
 os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 
@@ -106,7 +107,9 @@ with GPU_IMAGE.imports():
     volumes=VOLUME_CONFIG,
     secrets=SECRETS,
     timeout=5 * MINUTES,
+    scaledown_window=60 * MINUTES,
 )
+@modal.concurrent(max_inputs=vlm_max_num_seqs)
 def get_schedule_text(schedule_img: str) -> tuple[bool, str]:
     # set up model
     vlm = LLM(
@@ -188,8 +191,10 @@ def get_schedule_text(schedule_img: str) -> tuple[bool, str]:
     gpu="l40s:1",
     volumes=VOLUME_CONFIG,
     secrets=SECRETS,
-    timeout=2 * MINUTES,
+    timeout=10 * MINUTES,
+    scaledown_window=60 * MINUTES,
 )
+@modal.concurrent(max_inputs=reranker_concurrent_inputs)
 def rank_users(target_user_str: str, users_strs: list[str]) -> list[str]:
     ranker = Reranker(
         reranker_name,
@@ -201,7 +206,7 @@ def rank_users(target_user_str: str, users_strs: list[str]) -> list[str]:
         else "mps"
         if torch.backends.mps.is_available()
         else "cpu",
-        batch_size=batch_size,
+        batch_size=reranker_batch_size,
         model_kwargs={"cache_dir": PRETRAINED_VOL_PATH},
     )
     results = ranker.rank(query=target_user_str, docs=users_strs)
