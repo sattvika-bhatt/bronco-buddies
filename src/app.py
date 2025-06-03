@@ -218,6 +218,7 @@ def get_app():  # noqa: C901
         ],
         boost=True,
     )
+    f_app.devtools_json()
     f_app.add_middleware(
         CORSMiddleware,
         allow_origins=["/"],
